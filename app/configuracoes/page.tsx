@@ -58,7 +58,9 @@ const TIPOS_ESTABELECIMENTO: { value: TipoEstabelecimento; label: string }[] = [
 
 interface SettingsData {
   // Configurações gerais
-  nomeSalao: string;
+  nomeSalao: string; // Mantido para compatibilidade, será usado como nomeFantasia
+  nomeFantasia?: string;
+  razaoSocial?: string;
   telefoneSalao: string;
   emailSalao: string;
   enderecoSalao: string;
@@ -138,6 +140,8 @@ export default function SettingsPage() {
   const { company } = useCompany(companyId);
   const [settings, setSettings] = useState<SettingsData>({
     nomeSalao: '',
+    nomeFantasia: '',
+    razaoSocial: '',
     telefoneSalao: '',
     emailSalao: '',
     enderecoSalao: '',
@@ -258,9 +262,15 @@ export default function SettingsPage() {
             provider = 'disabled';
           }
           
+          // Migrar nomeSalao para nomeFantasia se necessário (compatibilidade com dados antigos)
+          const nomeFantasia = data.nomeFantasia ?? data.nomeSalao ?? '';
+          
           return {
             ...prev,
             ...data,
+            nomeSalao: data.nomeSalao ?? prev.nomeSalao, // Manter para compatibilidade
+            nomeFantasia: nomeFantasia,
+            razaoSocial: data.razaoSocial ?? prev.razaoSocial ?? '',
             whatsappProvider: provider ?? prev.whatsappProvider,
             // Se não houver tipo salvo, usar undefined (não padrão)
             whatsappIntegrationType: data.whatsappIntegrationType 
@@ -1641,6 +1651,8 @@ export default function SettingsPage() {
       // Salvar configurações da empresa específica
       const settingsToSave = {
         ...settings,
+        // Garantir que nomeSalao seja sincronizado com nomeFantasia para compatibilidade
+        nomeSalao: settings.nomeFantasia ?? settings.nomeSalao ?? '',
         // Incluir credenciais do Capim se estiverem preenchidas
         ...(capimEmail ? { capimEmail } : {}),
         ...(capimPassword ? { capimPassword } : {})
@@ -1878,12 +1890,26 @@ export default function SettingsPage() {
                 </CardHeader>
                 <CardContent className="grid grid-cols-1 gap-6 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="nome-empresa">Nome da Empresa</Label>
+                    <Label htmlFor="nome-fantasia">Nome Fantasia</Label>
                     <Input
-                      id="nome-empresa"
-                      value={settings.nomeSalao}
-                      onChange={(e) => setSettings(prev => ({ ...prev, nomeSalao: e.target.value }))}
+                      id="nome-fantasia"
+                      value={settings.nomeFantasia ?? settings.nomeSalao ?? ''}
+                      onChange={(e) => setSettings(prev => ({ 
+                        ...prev, 
+                        nomeFantasia: e.target.value,
+                        nomeSalao: e.target.value // Manter sincronizado para compatibilidade
+                      }))}
                       placeholder="Ex: AllOne Clínicas"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="razao-social">Razão Social</Label>
+                    <Input
+                      id="razao-social"
+                      value={settings.razaoSocial ?? ''}
+                      onChange={(e) => setSettings(prev => ({ ...prev, razaoSocial: e.target.value }))}
+                      placeholder="Ex: AllOne Clínicas Ltda"
                     />
                   </div>
                   

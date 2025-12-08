@@ -1062,17 +1062,28 @@ export function ProfessionalCalendar({
                               backgroundColor: lightenColor(event.professionalColor || event.color, 35, 0.9),
                               borderLeft: `3px solid ${event.statusColor}`,
                               minHeight: '24px',
-                              maxHeight: '24px',
+                              maxHeight: hoveredEventId === event.id ? 'none' : '24px',
+                              height: hoveredEventId === event.id ? 'auto' : '24px',
                               pointerEvents: 'auto',
+                              overflow: hoveredEventId === event.id ? 'visible' : 'hidden',
                             }}
                             onMouseEnter={() => setHoveredEventId(event.id)}
                             onMouseLeave={() => setHoveredEventId(null)}
                           >
                             <div className="absolute inset-0 bg-white/40 pointer-events-none" />
-                            <div className="relative z-10 flex items-center h-full">
-                              <div className="font-semibold text-[10px] text-slate-800 truncate leading-tight w-full">
-                                {event.name}
-                              </div>
+                            <div className="relative z-10 flex items-center" style={{ minHeight: '24px' }}>
+                              {(() => {
+                                const isHovered = hoveredEventId === event.id;
+                                return (
+                                  <div className={cn(
+                                    'font-semibold leading-tight w-full transition-all duration-300',
+                                    isHovered ? 'text-sm break-words' : 'text-[10px] truncate',
+                                    'text-slate-800'
+                                  )}>
+                                    {event.name}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
                         ))}
@@ -1306,7 +1317,7 @@ export function ProfessionalCalendar({
                                 top: `${topOffset}px`,
                                 left: finalLeft,
                                 width: finalWidth,
-                                height: `${height}px`,
+                                height: isHovered ? 'auto' : `${height}px`,
                                 minHeight: `${height}px`,
                                 maxHeight: 'none',
                                 boxSizing: 'border-box',
@@ -1331,10 +1342,10 @@ export function ProfessionalCalendar({
                                     pointerEvents: 'auto',
                                     position: 'relative',
                                     width: '100%',
-                                    height: `${height}px`,
+                                    height: isHovered ? 'auto' : `${height}px`,
                                     minHeight: `${height}px`,
                                     maxHeight: 'none',
-                                    overflow: 'visible',
+                                    overflow: isHovered ? 'visible' : 'hidden',
                                     boxSizing: 'border-box',
                                   }}
                                   onMouseEnter={() => setHoveredEventId(event.id)}
@@ -1344,21 +1355,25 @@ export function ProfessionalCalendar({
                                   <div className="absolute inset-0 bg-white/40 pointer-events-none" />
                                   <div className="relative z-10 flex items-start justify-between gap-1">
                                     <div className="flex-1 min-w-0">
-                                      <div className="font-bold text-sm text-slate-800 truncate leading-tight mb-0.5">
+                                      <div className={cn(
+                                        'font-bold leading-tight mb-0.5 transition-all duration-300',
+                                        isHovered ? 'text-sm break-words' : 'text-[10px] truncate',
+                                        'text-slate-800'
+                                      )}>
                                         {event.name}
                                       </div>
-                                      {durationMinutes >= 60 && height >= 50 && (
+                                      {(isHovered || (durationMinutes >= 60 && height >= 50)) && (
                                         <div className="flex items-center gap-1.5 text-[10px] text-slate-600">
                                           <Clock className="h-2.5 w-2.5 flex-shrink-0" />
-                                          <span className="truncate">
+                                          <span className={isHovered ? '' : 'truncate'}>
                                             {format(event.startDate, 'HH:mm', { locale: ptBR })} - {format(event.endDate, 'HH:mm', { locale: ptBR })}
                                           </span>
                                         </div>
                                       )}
-                                      {event.professional && durationMinutes >= 60 && height >= 50 && (
+                                      {event.professional && (isHovered || (durationMinutes >= 60 && height >= 50)) && (
                                         <div className="flex items-center gap-1 text-[10px] text-slate-500 mt-0.5">
                                           <User className="h-2.5 w-2.5 flex-shrink-0" />
-                                          <span className="truncate">{event.professional.apelido}</span>
+                                          <span className={isHovered ? '' : 'truncate'}>{event.professional.apelido}</span>
                                         </div>
                                       )}
                                     </div>
@@ -1513,20 +1528,33 @@ export function ProfessionalCalendar({
                         backgroundColor: lightenColor(event.professionalColor || event.color, 35, 0.9),
                         borderLeft: `4px solid ${event.statusColor}`,
                         pointerEvents: 'auto',
+                        overflow: hoveredEventId === event.id ? 'visible' : 'hidden',
                       }}
                       onMouseEnter={() => setHoveredEventId(event.id)}
                       onMouseLeave={() => setHoveredEventId(null)}
                     >
                       <div className="absolute inset-0 bg-white/40 pointer-events-none" />
-                      <div className="relative z-10 flex items-center justify-between gap-2">
+                      <div className={cn(
+                        'relative z-10 transition-all duration-300',
+                        hoveredEventId === event.id ? 'flex flex-col gap-1' : 'flex items-center justify-between gap-2'
+                      )}>
                         <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-sm text-slate-800 truncate">
-                            {event.name}
-                          </div>
+                          {(() => {
+                            const isHovered = hoveredEventId === event.id;
+                            return (
+                              <div className={cn(
+                                'font-semibold transition-all duration-300',
+                                isHovered ? 'text-sm break-words' : 'text-[10px] truncate',
+                                'text-slate-800'
+                              )}>
+                                {event.name}
+                              </div>
+                            );
+                          })()}
                           {event.professional && (
                             <div className="flex items-center gap-1 text-xs text-slate-500 mt-0.5">
                               <User className="h-3 w-3 flex-shrink-0" />
-                              <span className="truncate">{event.professional.apelido}</span>
+                              <span className={hoveredEventId === event.id ? '' : 'truncate'}>{event.professional.apelido}</span>
                             </div>
                           )}
                         </div>
@@ -1751,7 +1779,7 @@ export function ProfessionalCalendar({
                             top: `${topOffset}px`,
                             left: finalLeft,
                             width: finalWidth,
-                            height: `${height}px`,
+                            height: isHovered ? 'auto' : `${height}px`,
                             minHeight: `${height}px`,
                             maxHeight: 'none',
                             boxSizing: 'border-box',
@@ -1777,10 +1805,10 @@ export function ProfessionalCalendar({
                                 pointerEvents: 'auto',
                                 position: 'relative',
                                 width: '100%',
-                                height: `${height}px`,
+                                height: isHovered ? 'auto' : `${height}px`,
                                 minHeight: `${height}px`,
                                 maxHeight: 'none',
-                                overflow: 'visible',
+                                overflow: isHovered ? 'visible' : 'hidden',
                                 boxSizing: 'border-box',
                               }}
                               onMouseEnter={() => setHoveredEventId(event.id)}
@@ -1788,13 +1816,23 @@ export function ProfessionalCalendar({
                             >
                               {/* Overlay branco semi-transparente */}
                               <div className="absolute inset-0 bg-white/40 pointer-events-none" />
-                              <div className="relative z-10 flex items-start justify-between gap-2 h-full">
-                                <div className="flex-1 min-w-0 flex flex-col justify-between">
+                              <div className={cn(
+                                'relative z-10 flex items-start justify-between gap-2 transition-all duration-300',
+                                isHovered ? 'flex-col' : 'h-full'
+                              )}>
+                                <div className={cn(
+                                  'flex-1 min-w-0 transition-all duration-300',
+                                  isHovered ? '' : 'flex flex-col justify-between'
+                                )}>
                                   <div>
-                                    <div className="font-bold text-sm text-slate-800 leading-tight mb-1.5 line-clamp-2">
+                                    <div className={cn(
+                                      'font-bold leading-tight mb-1.5 transition-all duration-300',
+                                      isHovered ? 'text-sm break-words' : 'text-[10px] line-clamp-2',
+                                      'text-slate-800'
+                                    )}>
                                       {event.name}
                                     </div>
-                                    {durationMinutes >= 60 && height >= 50 && (
+                                    {(isHovered || (durationMinutes >= 60 && height >= 50)) && (
                                       <div className="flex items-center gap-1.5 text-xs text-slate-600 mb-1">
                                         <Clock className="h-3 w-3 flex-shrink-0" />
                                         <span>
@@ -1803,10 +1841,13 @@ export function ProfessionalCalendar({
                                       </div>
                                     )}
                                   </div>
-                                  {event.professional && durationMinutes >= 60 && height >= 50 && (
-                                    <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-auto">
+                                  {event.professional && (isHovered || (durationMinutes >= 60 && height >= 50)) && (
+                                    <div className={cn(
+                                      'flex items-center gap-1.5 text-xs text-slate-500',
+                                      isHovered ? 'mt-1' : 'mt-auto'
+                                    )}>
                                       <User className="h-3 w-3 flex-shrink-0" />
-                                      <span className="truncate">{event.professional.apelido}</span>
+                                      <span className={isHovered ? '' : 'truncate'}>{event.professional.apelido}</span>
                                     </div>
                                   )}
                                 </div>
