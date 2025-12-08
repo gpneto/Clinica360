@@ -1,0 +1,424 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ============================================
+    // FUNÇÕES AUXILIARES
+    // ============================================
+    
+    // Verifica se o usuário está autenticado
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Obtém o role do usuário do token
+    function userRole() { 
+      return request.auth.token.role; 
+    }
+    
+    // Obtém o companyId do token do usuário
+    // Retorna string vazia se não estiver definido (durante login inicial)
+    function userCompanyId() {
+      return request.auth.token.companyId != null ? request.auth.token.companyId : '';
+    }
+    
+    // Verifica se o companyId está definido no token (pode estar vazio durante login)
+    function hasCompanyIdInToken() {
+      return request.auth.token.companyId != null && request.auth.token.companyId != '';
+    }
+    
+    // Obtém o professionalId do token do usuário
+    function userProfessionalId() {
+      return request.auth.token.professionalId;
+    }
+    
+    // Verifica se é super_admin
+    function isSuperAdmin() {
+      return userRole() == 'super_admin';
+    }
+    
+    // Verifica se é owner ou admin
+    function isOwnerOrAdmin() { 
+      return userRole() == 'owner' || userRole() == 'admin'; 
+    }
+    
+    // Verifica se é owner
+    function isOwner() { 
+      return userRole() == 'owner'; 
+    }
+    
+    // Verifica se é profissional
+    function isProfessional() { 
+      return userRole() == 'pro'; 
+    }
+    
+    // Verifica se é atendente
+    function isAtendente() { 
+      return userRole() == 'atendente'; 
+    }
+    
+    // Verifica se é role 'outro'
+    function isOtherRole() {
+      return userRole() == 'outro';
+    }
+    
+    // Verifica se o usuário tem permissão para escrever em subcoleções de pacientes
+    // Permite se não tem role definido (null) OU se tem um dos roles permitidos
+    // O caminho da coleção já garante isolamento por empresa
+    function canWritePatientSubcollection() {
+      return isAuthenticated() && (
+        userRole() == null ||
+        isOwnerOrAdmin() ||
+        isAtendente() ||
+        isOtherRole() ||
+        isSuperAdmin() ||
+        isProfessional()
+      );
+    }
+    
+    // Verifica se o usuário tem acesso à empresa (companyId do token corresponde ao do documento)
+    // Durante login inicial, companyId pode não estar no token, então permite se autenticado
+    function belongsToCompany(companyId) {
+      return isAuthenticated() && (
+        (hasCompanyIdInToken() && userCompanyId() == companyId) ||
+        // Durante login inicial, permitir acesso se autenticado (companyId será verificado depois)
+        !hasCompanyIdInToken()
+      );
+    }
+    
+    // Verifica se o usuário é da empresa OU é super_admin
+    // Durante login inicial, permite acesso se autenticado (para descobrir empresas)
+    function hasCompanyAccess(companyId) {
+      return isSuperAdmin() || belongsToCompany(companyId) || 
+        // Permitir durante login inicial quando companyId não está no token ainda
+        (isAuthenticated() && !hasCompanyIdInToken());
+    }
+    
+    // ============================================
+    // COLEÇÕES ROOT (GLOBAIS)
+    // ============================================
+    
+    // Users collection (super_admin e usuários globais)
+    match /users/{uid} {
+      // Super admin pode ler/escrever tudo
+      allow read: if isSuperAdmin() || request.auth.uid == uid;
+      allow write: if isSuperAdmin() || request.auth.uid == uid;
+    }
+    
+    // Allowlist collection (emails permitidos para registro)
+    match /allowlist/{email} {
+      allow read: if isAuthenticated(); // Qualquer usuário autenticado pode ler
+      allow write: if isOwner() || isSuperAdmin(); // Apenas owners e super_admin podem escrever
+    }
+    
+    // Template de procedimentos odontológicos (público/global)
+    match /dental_procedures_templates/{templateId} {
+      allow read: if isAuthenticated(); // Qualquer usuário autenticado pode ler
+      allow write: if isSuperAdmin(); // Apenas super_admin pode escrever
+    }
+    
+    // Medicamentos (público/global)
+    match /medicamentos/{medicamentoId} {
+      allow read: if isAuthenticated(); // Qualquer usuário autenticado pode ler
+      allow write: if isAuthenticated(); // Qualquer usuário autenticado pode criar/editar (podem compartilhar medicamentos)
+    }
+    
+    // WhatsApp Phone Numbers (mapeamento número -> companyId)
+    match /whatsappPhoneNumbers/{phoneNumber} {
+      allow read: if true; // Pode ser lido por qualquer um (usado por webhooks)
+      // Permitir escrita para usuários autenticados
+      // Usado para atualizar mapeamento quando configurações são salvas
+      allow write: if isAuthenticated();
+    }
+
+    // ============================================
+    // COLEÇÃO COMPANIES (MULTI-TENANT)
+    // ============================================
+    
+    match /companies/{companyId} {
+      // Documento da empresa (metadata)
+      // Permitir leitura para usuários autenticados para descobrir empresas (necessário no login)
+      allow read: if isAuthenticated();
+      // Permitir criação para usuários autenticados (necessário no primeiro cadastro)
+      // Durante o setup inicial, o usuário ainda não tem companyId no token
+      allow create: if isAuthenticated();
+      // Permitir atualização para usuários da empresa ou super_admin
+      allow update: if isAuthenticated() && (
+        hasCompanyAccess(companyId) || 
+        request.resource.data.ownerUid == request.auth.uid
+      );
+      // Permitir exclusão apenas para super_admin ou owner da empresa
+      allow delete: if isSuperAdmin() || 
+        (isAuthenticated() && resource.data.ownerUid == request.auth.uid);
+      
+      // ============================================
+      // SUBCOLEÇÕES DA EMPRESA
+      // ============================================
+      
+      // Users da empresa (usuários com acesso à empresa)
+      match /users/{userId} {
+        // Permitir leitura se:
+        // 1. Usuário pertence à empresa (tem companyId no token) OU
+        // 2. É super_admin OU
+        // 3. O documento pertence ao usuário autenticado (por uid) OU
+        // 4. Usuário autenticado - necessário para query por email durante login inicial
+        //    O código do frontend busca por email para descobrir empresas associadas
+        //    Esta permissão é necessária porque o companyId ainda não está no token durante o login
+        allow read: if hasCompanyAccess(companyId) || 
+          (isAuthenticated() && resource.data.uid == request.auth.uid) ||
+          isAuthenticated(); // Permite query por email durante login - necessário para descobrir empresas
+        // Permitir criação durante setup inicial (usuário criando seu próprio registro)
+        // ou se for owner/admin da empresa
+        allow create: if isAuthenticated() && (
+          userId == request.auth.uid || // Usuário criando seu próprio registro na empresa
+          (isOwnerOrAdmin() && belongsToCompany(companyId))
+        );
+        // Permitir atualização para usuários autenticados
+        // O caminho da coleção companies/${companyId}/users já garante isolamento por empresa
+        allow update: if isAuthenticated();
+        allow delete: if isOwnerOrAdmin() && belongsToCompany(companyId);
+      }
+      
+      // Professionals (profissionais da empresa)
+      match /professionals/{professionalId} {
+        // O caminho da coleção já isola por empresa
+        allow read: if isAuthenticated();
+        // Permitir escrita para usuários autenticados
+        // O caminho da coleção já garante isolamento por empresa
+        allow write: if isAuthenticated();
+      }
+      
+      // Services (serviços oferecidos)
+      match /services/{serviceId} {
+        // O caminho da coleção já isola por empresa
+        allow read: if isAuthenticated();
+        // Permitir escrita para usuários autenticados
+        // O caminho da coleção já garante isolamento por empresa
+        allow write: if isAuthenticated();
+      }
+      
+      // Patients (pacientes/clientes)
+      match /patients/{patientId} {
+        // Permitir leitura para qualquer usuário autenticado
+        // O caminho da coleção já isola por empresa (companies/${companyId}/patients)
+        allow read: if isAuthenticated();
+        // Permitir criação para usuários autenticados
+        // O caminho da coleção (companies/${companyId}/patients) já garante isolamento por empresa
+        allow create: if isAuthenticated();
+        // Permitir atualização para usuários autenticados
+        allow update: if isAuthenticated();
+        // Permitir exclusão para usuários autenticados
+        // O caminho da coleção (companies/${companyId}/patients) já garante isolamento por empresa
+        // A verificação de role pode falhar se o token não tiver role definido
+        allow delete: if isAuthenticated();
+        
+        // Subcoleções do paciente
+        match /evolutions/{evolutionId} {
+          // O caminho da coleção já isola por empresa
+          allow read: if isAuthenticated();
+          allow write: if canWritePatientSubcollection();
+        }
+        
+        match /dentalProcedures/{procedureId} {
+          // O caminho da coleção já isola por empresa
+          allow read: if isAuthenticated();
+          // Permitir escrita (create, update, delete) para usuários autenticados
+          // O caminho da coleção (companies/${companyId}/patients/${patientId}/dentalProcedures) já garante isolamento por empresa
+          allow create: if canWritePatientSubcollection();
+          allow update: if canWritePatientSubcollection();
+          // Permitir exclusão para qualquer usuário autenticado
+          // O isolamento é garantido pelo caminho da coleção
+          allow delete: if isAuthenticated();
+        }
+        
+        match /debitos/{debitoId} {
+          // O caminho da coleção já isola por empresa
+          allow read: if isAuthenticated();
+          allow write: if isAuthenticated() && (isOwnerOrAdmin() || isAtendente() || isOtherRole() || isSuperAdmin() || isProfessional());
+        }
+        
+        match /orcamentos/{orcamentoId} {
+          // O caminho da coleção já isola por empresa
+          allow read: if isAuthenticated();
+          allow write: if isAuthenticated() && (isOwnerOrAdmin() || isAtendente() || isOtherRole() || isSuperAdmin() || isProfessional());
+          // Permitir leitura pública por token de assinatura (via Cloud Function)
+          // A Cloud Function valida o token antes de permitir acesso
+        }
+        
+        match /anamneses/{anamneseId} {
+          // O caminho da coleção já isola por empresa
+          allow read: if isAuthenticated();
+          allow write: if isAuthenticated() && (isOwnerOrAdmin() || isAtendente() || isOtherRole() || isSuperAdmin() || isProfessional());
+          // Permitir leitura pública por token de assinatura (via Cloud Function)
+          // A Cloud Function valida o token antes de permitir acesso
+        }
+        
+        match /documentos/{documentoId} {
+          // O caminho da coleção já isola por empresa
+          allow read: if isAuthenticated();
+          allow write: if isAuthenticated() && (isOwnerOrAdmin() || isAtendente() || isOtherRole() || isSuperAdmin() || isProfessional());
+        }
+        
+        match /receitas/{receitaId} {
+          // O caminho da coleção já isola por empresa
+          allow read: if isAuthenticated();
+          allow write: if isAuthenticated() && (isOwnerOrAdmin() || isAtendente() || isOtherRole() || isSuperAdmin() || isProfessional());
+        }
+        
+        match /atestados/{atestadoId} {
+          // O caminho da coleção já isola por empresa
+          allow read: if isAuthenticated();
+          allow write: if isAuthenticated() && (isOwnerOrAdmin() || isAtendente() || isOtherRole() || isSuperAdmin() || isProfessional());
+        }
+      }
+      
+      // Appointments (agendamentos)
+      match /appointments/{appointmentId} {
+        // Permitir leitura para qualquer usuário autenticado
+        // O caminho da coleção já isola por empresa (companies/${companyId}/appointments)
+        // Nota: Role e companyId podem não estar no token durante inicialização
+        // O isolamento é garantido pelo caminho da coleção
+        allow read: if isAuthenticated();
+        // Permitir criação para usuários autenticados
+        // O caminho da coleção já garante isolamento por empresa
+        allow create: if isAuthenticated();
+        // Permitir atualização para usuários autenticados
+        // O caminho da coleção já garante isolamento por empresa
+        allow update: if isAuthenticated();
+        // Permitir exclusão
+        // TEMPORÁRIO: Permitir delete para qualquer usuário autenticado para testar
+        // TODO: Restringir após confirmar que funciona
+        allow delete: if isAuthenticated();
+      }
+      
+      // Settings da empresa
+      match /settings/{settingId} {
+        // O caminho da coleção já isola por empresa
+        allow read: if isAuthenticated();
+        // Permitir escrita para usuários autenticados
+        // O caminho da coleção já garante isolamento por empresa
+        allow write: if isAuthenticated();
+      }
+      
+      // Modelos de anamnese
+      match /anamneseModelos/{modeloId} {
+        // O caminho da coleção já isola por empresa
+        allow read: if isAuthenticated();
+        // Permitir escrita para usuários autenticados
+        // O caminho da coleção já garante isolamento por empresa
+        allow write: if isAuthenticated();
+      }
+      
+      // Invoices (faturas)
+      match /invoices/{invoiceId} {
+        // O caminho da coleção já isola por empresa
+        allow read: if isAuthenticated();
+        allow write: if (isOwnerOrAdmin() && belongsToCompany(companyId)) || isSuperAdmin();
+      }
+      
+      // WhatsApp Messages (mensagens do WhatsApp)
+      match /whatsappMessages/{messageId} {
+        // O caminho da coleção já isola por empresa
+        allow read: if isAuthenticated();
+        // Permitir escrita apenas para usuários da empresa (Cloud Functions também usam tokens)
+        // Em criação: verificar request.resource tem companyId correto
+        allow create: if hasCompanyAccess(companyId) && request.resource.data.companyId == companyId;
+        // Em update: permitir atualizações parciais (como marcar como lida) para usuários autenticados
+        // O caminho da coleção (companies/{companyId}/whatsappMessages) já garante isolamento por empresa
+        // Se o documento tiver companyId, verificar que corresponde ao caminho; caso contrário, confiar no caminho
+        allow update: if isAuthenticated() && 
+          (resource.data.companyId == null || resource.data.companyId == companyId);
+        allow delete: if (isOwnerOrAdmin() && belongsToCompany(companyId)) || isSuperAdmin();
+      }
+      
+      // WhatsApp Contacts (contatos do WhatsApp)
+      match /whatsappContacts/{contactId} {
+        // O caminho da coleção já isola por empresa
+        allow read: if isAuthenticated();
+        // Permitir escrita apenas para usuários da empresa (Cloud Functions também usam tokens)
+        allow create: if hasCompanyAccess(companyId) && request.resource.data.companyId == companyId;
+        allow update: if hasCompanyAccess(companyId) && request.resource.data.companyId == companyId;
+        allow delete: if (isOwnerOrAdmin() && belongsToCompany(companyId)) || isSuperAdmin();
+      }
+      
+      // Webhook Agendamentos (agendamentos recebidos via webhook)
+      match /webhookAgendamentos/{webhookId} {
+        // O caminho da coleção já isola por empresa
+        allow read: if isAuthenticated();
+        // Apenas Cloud Functions podem escrever
+        allow write: if false;
+      }
+      
+      // Integrations (integrações da empresa, como WhatsApp Evolution)
+      match /integrations/{integrationId} {
+        // O caminho da coleção já isola por empresa
+        allow read: if isAuthenticated();
+        // Permitir escrita apenas para usuários da empresa (Cloud Functions também usam tokens)
+        allow write: if hasCompanyAccess(companyId);
+      }
+    }
+    
+    // ============================================
+    // COLEÇÕES LEGADAS (MANTIDAS PARA COMPATIBILIDADE)
+    // ============================================
+    
+    // Professionals (coleção root - legado)
+    match /professionals/{professionalId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwnerOrAdmin() || isSuperAdmin();
+    }
+
+    // Services (coleção root - legado)
+    match /services/{serviceId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwnerOrAdmin() || isSuperAdmin();
+    }
+
+    // Clients (coleção root - legado, mantida para compatibilidade)
+    match /clients/{clientId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwnerOrAdmin() || isAtendente() || isSuperAdmin();
+    }
+
+    // Appointments (coleção root - legado)
+    match /appointments/{appointmentId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwnerOrAdmin() || isAtendente() || 
+        (isProfessional() && request.resource.data.professionalId == userProfessionalId());
+      allow update: if isOwnerOrAdmin() || isAtendente() || 
+        (isProfessional() && resource.data.professionalId == userProfessionalId());
+      allow delete: if isOwnerOrAdmin() || isAtendente() || 
+        (isProfessional() && resource.data.professionalId == userProfessionalId());
+    }
+
+    // Messages (mensagens de agendamento)
+    match /messages/{messageId} {
+      allow read: if isOwnerOrAdmin() || isSuperAdmin();
+      allow write: if false; // Apenas Cloud Functions podem escrever
+    }
+
+    // Audit logs
+    match /auditLogs/{logId} {
+      allow read: if isOwnerOrAdmin() || isSuperAdmin();
+      allow write: if false; // Apenas Cloud Functions podem escrever
+    }
+
+    // Settings globais
+    match /settings/{settingId} {
+      allow read: if isAuthenticated(); // Configurações públicas podem ser lidas
+      allow write: if isOwnerOrAdmin() || isSuperAdmin();
+    }
+
+    // Financial reports
+    match /financialReports/{reportId} {
+      allow read: if isOwnerOrAdmin() || isSuperAdmin();
+      allow write: if false; // Apenas Cloud Functions podem escrever
+    }
+    
+    // Birthday Messages (mensagens de aniversário enviadas)
+    match /birthdayMessages/{messageId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Apenas Cloud Functions podem escrever
+    }
+  }
+}

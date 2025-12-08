@@ -1,0 +1,37 @@
+<svg width="800" height="450" viewBox="0 0 800 450" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg5" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fffbeb;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#fef3c7;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="800" height="450" fill="url(#bg5)"/>
+  <!-- Header -->
+  <rect x="0" y="0" width="800" height="60" fill="#d97706"/>
+  <rect x="20" y="15" width="150" height="30" rx="4" fill="#ffffff" opacity="0.2"/>
+  <!-- WhatsApp Messages -->
+  <rect x="40" y="100" width="720" height="300" rx="8" fill="#ffffff" stroke="#fde68a" stroke-width="2"/>
+  
+  <!-- Message 1 -->
+  <rect x="420" y="120" width="320" height="60" rx="8" fill="#dcfce7"/>
+  <rect x="440" y="135" width="280" height="15" rx="4" fill="#166534"/>
+  <rect x="440" y="155" width="200" height="15" rx="4" fill="#166534"/>
+  
+  <!-- Message 2 -->
+  <rect x="60" y="200" width="320" height="60" rx="8" fill="#e0e7ff"/>
+  <rect x="80" y="215" width="280" height="15" rx="4" fill="#1e293b"/>
+  <rect x="80" y="235" width="250" height="15" rx="4" fill="#1e293b"/>
+  
+  <!-- Message 3 -->
+  <rect x="420" y="280" width="320" height="60" rx="8" fill="#dcfce7"/>
+  <rect x="440" y="295" width="280" height="15" rx="4" fill="#166534"/>
+  <rect x="440" y="315" width="180" height="15" rx="4" fill="#166534"/>
+  
+  <!-- Time indicators -->
+  <rect x="700" y="175" width="40" height="10" rx="4" fill="#9ca3af"/>
+  <rect x="300" y="255" width="40" height="10" rx="4" fill="#9ca3af"/>
+  <rect x="700" y="335" width="40" height="10" rx="4" fill="#9ca3af"/>
+  
+  <text x="400" y="420" font-family="Arial" font-size="14" fill="#64748b">Lembretes Automáticos</text>
+</svg>
+

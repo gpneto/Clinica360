@@ -1,0 +1,776 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 14% 96%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 222 47% 20%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 216 33% 91%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 215 20% 88%;
+    --muted-foreground: 215 16% 35%;
+    --accent: 215 20% 92%;
+    --accent-foreground: 222 47% 15%;
+    --destructive: 0 91% 71%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 213 27% 84%;
+    --input: 213 27% 84%;
+    --ring: 222 47% 20%;
+    --radius: 0.75rem;
+    --page-background: #f1f5f9;
+    --page-background-image: radial-gradient(circle at top, rgba(148, 163, 184, 0.15) 0, transparent 55%), radial-gradient(circle at bottom, rgba(148, 163, 184, 0.1) 0, transparent 60%);
+    --card-background: #ffffff;
+    --card-border: rgba(15, 23, 42, 0.08);
+    --card-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+    --card-backdrop: none;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  html {
+    /* Mobile first approach */
+    font-size: 12.6px;
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  body {
+    @apply bg-background text-foreground;
+    background: var(--page-background);
+    background-image: var(--page-background-image);
+    background-attachment: fixed;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: auto;
+    touch-action: auto;
+  }
+
+  body.theme-neutral {
+    --page-background: #f1f5f9;
+    --page-background-image: radial-gradient(circle at top, rgba(148, 163, 184, 0.15) 0, transparent 55%), radial-gradient(circle at bottom, rgba(148, 163, 184, 0.1) 0, transparent 60%);
+    --card-background: #ffffff;
+    --card-border: rgba(15, 23, 42, 0.08);
+    --card-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+    --card-backdrop: none;
+  }
+
+  body.theme-vibrant {
+    --background: 230 100% 97%;
+    --foreground: 229 35% 15%;
+    --card: 0 0% 100%;
+    --card-foreground: 229 35% 18%;
+    --primary: 259 84% 60%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 211 95% 90%;
+    --secondary-foreground: 224 40% 24%;
+    --accent: 328 80% 74%;
+    --accent-foreground: 229 35% 20%;
+    --muted: 227 58% 90%;
+    --muted-foreground: 228 30% 38%;
+    --border: 249 55% 82%;
+    --input: 249 55% 82%;
+    --ring: 259 84% 60%;
+    --page-background: linear-gradient(135deg, #eef2ff 0%, #fdf2f8 100%);
+    --page-background-image: radial-gradient(circle at 18% -10%, rgba(99, 102, 241, 0.3) 0, transparent 55%), radial-gradient(circle at 90% 110%, rgba(236, 72, 153, 0.28) 0, transparent 55%);
+    --card-background: linear-gradient(150deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.78));
+    --card-border: rgba(99, 102, 241, 0.28);
+    --card-shadow: 0 22px 45px rgba(99, 102, 241, 0.2);
+    --card-backdrop: blur(10px);
+  }
+
+  body.theme-custom {
+    --page-background: var(--custom-page-background, linear-gradient(135deg, #eef2ff 0%, #fdf2f8 100%));
+    --page-background-image: var(--custom-page-background-image, radial-gradient(circle at 18% -10%, rgba(99, 102, 241, 0.3) 0, transparent 55%), radial-gradient(circle at 90% 110%, rgba(236, 72, 153, 0.28) 0, transparent 55%));
+    --card-background: var(--custom-card-background, linear-gradient(150deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.78)));
+    --card-border: var(--custom-card-border, rgba(99, 102, 241, 0.28));
+    --card-shadow: var(--custom-card-shadow, 0 22px 45px rgba(99, 102, 241, 0.2));
+    --card-backdrop: blur(10px);
+  }
+
+  .app-page {
+    background: var(--page-background);
+    background-image: var(--page-background-image);
+    transition: background 0.35s ease, color 0.35s ease, box-shadow 0.35s ease;
+  }
+
+  /* Landscape mobile specific styles */
+  @media (orientation: landscape) and (max-width: 767px) {
+    .app-page {
+      height: 100vh;
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+    }
+  }
+
+  .app-card {
+    background: var(--card-background);
+    border: 1px solid var(--card-border);
+    box-shadow: var(--card-shadow);
+    border-radius: 1.25rem;
+    backdrop-filter: var(--card-backdrop);
+    transition: background 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
+  }
+
+  .app-card:hover {
+    box-shadow: 0 28px 55px rgba(15, 23, 42, 0.08);
+  }
+
+  body.theme-vibrant .app-card:hover,
+  body.theme-custom .app-card:hover {
+    box-shadow: 0 28px 55px rgba(99, 102, 241, 0.25);
+  }
+  
+  body.theme-vibrant .app-card,
+  body.theme-custom .app-card {
+    position: relative;
+    overflow: hidden;
+  }
+
+  body.theme-vibrant .app-card::before,
+  body.theme-custom .app-card::before {
+    content: '';
+    position: absolute;
+    inset: -40% -20%;
+    background: radial-gradient(circle at center, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
+    opacity: 0;
+    transform: scale(0.9);
+    transition: opacity 0.45s ease, transform 0.45s ease;
+    pointer-events: none;
+  }
+
+  body.theme-vibrant .app-card:hover::before,
+  body.theme-custom .app-card:hover::before {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+
+  body.theme-custom .app-card:hover {
+    box-shadow: var(--custom-card-shadow, 0 28px 55px rgba(99, 102, 241, 0.25));
+  }
+
+  body.theme-vibrant .bg-white,
+  body.theme-vibrant .bg-white\/95,
+  body.theme-vibrant .bg-white\/90,
+  body.theme-vibrant .bg-white\/85,
+  body.theme-vibrant .bg-white\/80,
+  body.theme-vibrant .bg-gray-50,
+  body.theme-vibrant .bg-slate-50,
+  body.theme-vibrant .bg-slate-100,
+  body.theme-vibrant .bg-gray-100,
+  body.theme-custom .bg-white,
+  body.theme-custom .bg-white\/95,
+  body.theme-custom .bg-white\/90,
+  body.theme-custom .bg-white\/85,
+  body.theme-custom .bg-white\/80,
+  body.theme-custom .bg-gray-50,
+  body.theme-custom .bg-slate-50,
+  body.theme-custom .bg-slate-100,
+  body.theme-custom .bg-gray-100 {
+    background: rgba(255, 255, 255, 0.82) !important;
+    color: rgba(15, 23, 42, 0.92);
+    backdrop-filter: blur(12px);
+  }
+
+  body.theme-vibrant .border-slate-200,
+  body.theme-vibrant .border-gray-200,
+  body.theme-vibrant .border-white\/20,
+  body.theme-custom .border-slate-200,
+  body.theme-custom .border-gray-200,
+  body.theme-custom .border-white\/20 {
+    border-color: rgba(148, 163, 184, 0.35) !important;
+  }
+
+  body.theme-vibrant .shadow-sm,
+  body.theme-vibrant .shadow,
+  body.theme-vibrant .shadow-md,
+  body.theme-vibrant .shadow-lg,
+  body.theme-vibrant .shadow-xl,
+  body.theme-vibrant .shadow-2xl,
+  body.theme-custom .shadow-sm,
+  body.theme-custom .shadow,
+  body.theme-custom .shadow-md,
+  body.theme-custom .shadow-lg,
+  body.theme-custom .shadow-xl,
+  body.theme-custom .shadow-2xl {
+    box-shadow: var(--custom-card-shadow, 0 22px 45px rgba(99, 102, 241, 0.16)) !important;
+  }
+
+  body.theme-vibrant .text-slate-500,
+  body.theme-vibrant .text-gray-500,
+  body.theme-custom .text-slate-500,
+  body.theme-custom .text-gray-500 {
+    color: rgba(15, 23, 42, 0.7) !important;
+  }
+
+  body.theme-vibrant .bg-emerald-50,
+  body.theme-custom .bg-emerald-50 {
+    background: rgba(16, 185, 129, 0.12) !important;
+    border-color: rgba(16, 185, 129, 0.35) !important;
+  }
+
+  body.theme-vibrant .bg-red-50,
+  body.theme-custom .bg-red-50 {
+    background: rgba(248, 113, 113, 0.12) !important;
+    border-color: rgba(248, 113, 113, 0.35) !important;
+  }
+
+  body.theme-vibrant table thead,
+  body.theme-custom table thead {
+    background: rgba(255, 255, 255, 0.66) !important;
+    color: rgba(30, 41, 59, 0.82) !important;
+    border-color: rgba(148, 163, 184, 0.35) !important;
+  }
+
+  body.theme-vibrant table tbody tr:hover,
+  body.theme-custom table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.72) !important;
+  }
+
+ 
+  .theme-preview {
+    border-radius: 1rem;
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .theme-preview-neutral {
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  }
+
+  .theme-preview-vibrant {
+    background: linear-gradient(135deg, #6366f1 0%, #ec4899 100%);
+  }
+
+  .theme-preview-custom {
+    background: linear-gradient(135deg, var(--custom-gradient-start, #6366f1) 0%, var(--custom-gradient-end, #ec4899) 100%);
+  }
+
+  .theme-preview::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.35), transparent 45%);
+    mix-blend-mode: screen;
+  }
+  
+  /* Mobile first responsive font sizes */
+  @media (min-width: 640px) {
+    html {
+      font-size: 16px;
+    }
+  }
+  
+  /* Prevent zoom on input focus in iOS */
+  input[type="text"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="password"],
+  input[type="number"],
+  input[type="date"],
+  input[type="time"],
+  textarea,
+  select {
+    font-size: 16px;
+  }
+  
+  @media (min-width: 640px) {
+    input[type="text"],
+    input[type="email"],
+    input[type="tel"],
+    input[type="password"],
+    input[type="number"],
+    input[type="date"],
+    input[type="time"],
+    textarea,
+    select {
+      font-size: 14px;
+    }
+  }
+}
+
+/* Mobile drawer optimizations */
+@media (max-width: 640px) {
+  /* Melhorias globais de scroll no mobile */
+  html, body {
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior-y: auto !important;
+  }
+  body {
+    /* Evitar travas de scroll causadas por backgrounds fixos */
+    background-attachment: scroll !important;
+  }
+  .app-page, .app-card, main, [data-view], .mobile-scroll-container {
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior-y: auto !important;
+  }
+
+  .mobile-drawer {
+    height: 100vh !important;
+    max-height: 100vh !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding-top: env(safe-area-inset-top, 0px) !important;
+    padding-bottom: 0 !important;
+  }
+  
+  /* Mobile drawer footer - ensure buttons are visible */
+  .mobile-drawer .border-t {
+    position: fixed !important;
+    bottom: env(safe-area-inset-bottom, 0px) !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 9999 !important;
+    background: white !important;
+    border-top: 1px solid #e5e7eb !important;
+    padding: 16px !important;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)) !important;
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15) !important;
+    margin-bottom: 0 !important;
+  }
+  
+  /* Mobile drawer buttons */
+  .mobile-drawer button {
+    min-height: 48px !important;
+    font-size: 16px !important;
+    padding: 12px 20px !important;
+    flex-shrink: 0 !important;
+    font-weight: 600 !important;
+    border-radius: 8px !important;
+  }
+  
+  /* Mobile safe area support */
+  .mobile-drawer {
+    /* Ensure safe area is respected */
+    padding-left: env(safe-area-inset-left, 0px) !important;
+    padding-right: env(safe-area-inset-right, 0px) !important;
+  }
+  
+  /* Mobile drawer header safe area */
+  .mobile-drawer .border-b {
+    padding-left: env(safe-area-inset-left, 0px) !important;
+    padding-right: env(safe-area-inset-right, 0px) !important;
+  }
+  
+  /* Mobile drawer header - extra padding for address bar in portrait mode */
+  @media (orientation: portrait) and (max-width: 640px) {
+    .mobile-drawer .border-b {
+      padding-top: calc(1.5rem + env(safe-area-inset-top, 0px) + 56px) !important;
+    }
+  }
+  
+  /* Mobile drawer header - normal padding in landscape mode */
+  @media (orientation: landscape) and (max-width: 640px) {
+    .mobile-drawer .border-b {
+      padding-top: calc(1rem + env(safe-area-inset-top, 0px)) !important;
+    }
+  }
+  
+  /* Mobile drawer content area - add extra padding for sticky footer */
+  .mobile-drawer .flex-1 {
+    padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  
+  /* Mobile drawer footer - ensure it stays above keyboard */
+  .mobile-drawer .sticky.bottom-0 {
+    position: sticky !important;
+    bottom: 0 !important;
+    background: white !important;
+    border-top: 1px solid #e5e7eb !important;
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1) !important;
+    z-index: 100 !important;
+  }
+  
+  /* Mobile drawer footer buttons - ensure visibility */
+  .mobile-drawer .sticky.bottom-0 button {
+    position: relative !important;
+    z-index: 101 !important;
+  }
+  
+  /* Advanced Filters - Force highest z-index */
+  .advanced-filters-dropdown {
+    z-index: 999999 !important;
+    position: fixed !important;
+    isolation: isolate !important;
+    max-height: calc(100vh - 100px) !important;
+    overflow-y: auto !important;
+  }
+  
+  /* Estilos para o Bryntum Calendar */
+  .b-calendar {
+    position: relative !important;
+    z-index: 10 !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    display: block !important;
+    width: 100% !important;
+    height: 100% !important;
+  }
+  
+  /* Estilos para barras de status nos eventos do Bryntum Calendar */
+  .b-event {
+    position: relative !important;
+    overflow: visible !important;
+  }
+  
+  .b-event .status-bar-left,
+  .b-event .status-bar-right {
+    position: absolute !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    width: 4px !important;
+    z-index: 100 !important;
+    pointer-events: none !important;
+  }
+  
+  .b-event .status-bar-left {
+    left: 0 !important;
+  }
+  
+  .b-event .status-bar-right {
+    right: 0 !important;
+  }
+
+  .calendar-container {
+    position: relative !important;
+    z-index: 1 !important;
+    overflow: visible !important;
+    width: 100% !important;
+  }
+
+  .calendar-container > div {
+    position: relative !important;
+    z-index: 10 !important;
+    overflow: visible !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
+  }
+
+  /* Garantir que eventos do calendário não sejam cortados */
+  [data-view] [class*="absolute"][data-event-height] {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  [data-view] [class*="absolute"][data-event-height] > div {
+    height: 100% !important;
+    min-height: 100% !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* Garantir que containers do calendário não cortem eventos */
+  [data-view="week"] .grid,
+  [data-view="day"] .grid {
+    overflow: visible !important;
+    position: relative !important;
+  }
+
+  [data-view="week"] .relative,
+  [data-view="day"] .relative {
+    overflow: visible !important;
+    position: relative !important;
+  }
+
+  /* Garantir que células do grid não limitem altura de elementos absolutos */
+  [data-view="week"] .grid > div,
+  [data-view="day"] .grid > div {
+    overflow: visible !important;
+    position: relative !important;
+  }
+
+  /* Forçar altura dos eventos baseada no atributo data */
+  [data-view] [data-event-height] {
+    height: var(--event-height, auto) !important;
+  }
+
+  /* Force calendar to expand in landscape mode */
+  @media (orientation: landscape) and (max-width: 767px) {
+    .calendar-container {
+      min-height: auto !important;
+      height: auto !important;
+    }
+    
+    .calendar-container > div {
+      min-height: auto !important;
+      height: auto !important;
+    }
+  }
+  
+  /* Garantir que elementos do Bryntum sejam visíveis */
+  .b-calendar * {
+    visibility: visible !important;
+  }
+  
+  /* Prevent body scroll on mobile */
+  body {
+    overflow-x: hidden !important;
+    position: relative !important;
+    width: 100% !important;
+    min-height: 100vh !important;
+  }
+  
+  /* Mobile scroll container - removed height restrictions */
+  .mobile-scroll-container {
+    -webkit-overflow-scrolling: touch !important;
+    overflow-y: visible !important;
+    height: auto !important;
+    padding-bottom: 60px !important;
+  }
+  
+  /* Mobile bottom safe area */
+  .mobile-bottom-safe {
+    height: env(safe-area-inset-bottom, 20px) !important;
+  background: white !important;
+  }
+  
+  /* Limitar horários do calendário moderno: 08:00 - 20:00 */
+  .modern-calendar-container table tbody tr[data-hour="0"],
+  .modern-calendar-container table tbody tr[data-hour="1"],
+  .modern-calendar-container table tbody tr[data-hour="2"],
+  .modern-calendar-container table tbody tr[data-hour="3"],
+  .modern-calendar-container table tbody tr[data-hour="4"],
+  .modern-calendar-container table tbody tr[data-hour="5"],
+  .modern-calendar-container table tbody tr[data-hour="6"],
+  .modern-calendar-container table tbody tr[data-hour="7"],
+  .modern-calendar-container table tbody tr[data-hour="21"],
+  .modern-calendar-container table tbody tr[data-hour="22"],
+  .modern-calendar-container table tbody tr[data-hour="23"] {
+    display: none !important;
+  }
+  
+  .modern-calendar-container [data-hour="0"],
+  .modern-calendar-container [data-hour="1"],
+  .modern-calendar-container [data-hour="2"],
+  .modern-calendar-container [data-hour="3"],
+  .modern-calendar-container [data-hour="4"],
+  .modern-calendar-container [data-hour="5"],
+  .modern-calendar-container [data-hour="6"],
+  .modern-calendar-container [data-hour="7"],
+  .modern-calendar-container [data-hour="21"],
+  .modern-calendar-container [data-hour="22"],
+  .modern-calendar-container [data-hour="23"] {
+    display: none !important;
+  }
+
+  /* Mobile-friendly modal */
+  .mobile-modal {
+    padding: 16px !important;
+    margin: 16px !important;
+    max-height: calc(100vh - 32px) !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  
+  /* Limitar touch-action a elementos interativos (evitar travas de scroll no mobile) */
+  button, [role="button"], a, input, textarea, select {
+    touch-action: manipulation;
+  }
+  
+  /* Better input focus */
+  input:focus,
+  textarea:focus,
+  select:focus {
+    transform: scale(1.02) !important;
+    transition: transform 0.2s ease !important;
+  }
+  
+  /* Mobile drawer progress steps - reduzir altura no mobile */
+  .mobile-drawer .border-b:has([class*="flex flex-col items-center"]) {
+    padding-top: 2px !important;
+    padding-bottom: 2px !important;
+    min-height: unset !important;
+    height: auto !important;
+  }
+  
+  .mobile-drawer .border-b [class*="flex flex-col items-center"] {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    min-height: 0 !important;
+  }
+  
+  .mobile-drawer .border-b [class*="flex flex-col items-center"] > div[class*="flex h-6"] {
+    margin-bottom: 0 !important;
+    margin-top: 0 !important;
+  }
+  
+  .mobile-drawer .border-b [class*="flex flex-col items-center"] > span {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    line-height: 1 !important;
+  }
+  
+  /* Ajustar linha de conexão dos passos - centralizar verticalmente com pequeno ajuste para cima */
+  .mobile-drawer .border-b [class*="absolute left-1/2"][class*="h-0.5"] {
+    top: calc(50% - 3px) !important;
+    transform: translateY(-50%) !important;
+    z-index: 0 !important;
+  }
+  
+  /* Ajuste adicional para mobile */
+  @media (max-width: 639px) {
+    .mobile-drawer .border-b [class*="absolute left-1/2"][class*="h-0.5"] {
+      top: calc(50% - 4px) !important;
+    }
+  }
+  
+  /* Ajuste para desktop */
+  @media (min-width: 640px) {
+    .mobile-drawer .border-b [class*="absolute left-1/2"][class*="h-0.5"] {
+      top: calc(50% - 2px) !important;
+    }
+  }
+
+  /* Prevenir corte de botões no footer do modal mobile */
+  @media (max-width: 767px) {
+    .mobile-drawer {
+      max-width: 100vw !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
+    }
+
+    .mobile-drawer > div {
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+    }
+
+    /* Footer do modal - garantir que botões não sejam cortados */
+    .mobile-drawer [class*="border-t"][class*="z-[100]"] {
+      max-width: 100% !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
+      overflow: visible !important;
+    }
+
+    /* Container de botões do footer */
+    .mobile-drawer [class*="flex items-center justify-between"] {
+      max-width: 100% !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
+      overflow: visible !important;
+    }
+
+    /* Botões do footer - garantir que não sejam cortados */
+    .mobile-drawer button[class*="Próximo"],
+    .mobile-drawer button:has-text("Próximo") {
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+      flex-shrink: 0 !important;
+    }
+  }
+
+  /* Prevenir overflow horizontal na agenda mobile - iPhone */
+  @media (max-width: 767px) {
+    /* Garantir que a página de agenda não ultrapasse a largura do viewport */
+    .app-page {
+      max-width: 100vw !important;
+      width: 100% !important;
+      overflow-x: hidden !important;
+      position: relative !important;
+    }
+
+    /* Garantir que todos os elementos filhos respeitem a largura */
+    .app-page > * {
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+    }
+
+    /* Header mobile da agenda - ajustar padding para não ultrapassar */
+    .app-page .sticky.top-0 {
+      max-width: 100vw !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
+      padding-left: min(4rem, 16vw) !important;
+      padding-right: min(0.5rem, 2vw) !important;
+    }
+
+    /* Container de conteúdo mobile */
+    .app-page .flex.flex-col.px-2 {
+      max-width: 100vw !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
+      padding-left: min(0.5rem, 2vw) !important;
+      padding-right: min(0.5rem, 2vw) !important;
+    }
+
+    /* Calendário mobile - garantir que não ultrapasse */
+    .calendar-container {
+      max-width: 100% !important;
+      width: 100% !important;
+      overflow-x: hidden !important;
+      box-sizing: border-box !important;
+    }
+
+    /* Todos os elementos dentro do calendário */
+    .calendar-container * {
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+    }
+
+    /* Botões e controles - garantir que não ultrapassem */
+    .app-page button,
+    .app-page .inline-flex {
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+    }
+
+    /* Garantir que o body e html não tenham overflow */
+    html, body {
+      max-width: 100vw !important;
+      overflow-x: hidden !important;
+      position: relative !important;
+    }
+
+    /* Garantir que elementos com largura fixa sejam responsivos */
+    .app-page [style*="width"] {
+      max-width: 100% !important;
+    }
+  }
+
+    /* Específico para iPhone - garantir viewport correto */
+    @supports (-webkit-touch-callout: none) {
+      @media (max-width: 767px) {
+        .app-page {
+          -webkit-overflow-scrolling: touch !important;
+          overflow-x: hidden !important;
+          width: 100vw !important;
+          max-width: 100vw !important;
+        }
+
+        /* Ajustar padding do header para iPhone */
+        .app-page .sticky.top-0 {
+          padding-left: min(4rem, 15vw) !important;
+          padding-right: 0.5rem !important;
+        }
+
+        /* Garantir que todos os elementos filhos não ultrapassem */
+        .app-page * {
+          max-width: 100% !important;
+          box-sizing: border-box !important;
+        }
+
+        /* Garantir que elementos com position absolute não ultrapassem */
+        .app-page [style*="position: absolute"],
+        .app-page [style*="position:fixed"] {
+          max-width: 100vw !important;
+        }
+      }
+    }
+}

@@ -1,0 +1,65 @@
+services:
+  baileys-worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    container_name: baileys-worker
+    restart: unless-stopped
+    volumes:
+      # Montar arquivo de service account (substitua pelo caminho correto)
+      - /Volumes/MacMini/Projetos/SmartDoctor/worker/agendamentointeligente-4405f-firebase-adminsdk-fbsvc-ee4b0c5b8a.json:/app/service-account.json:ro
+      # Opcional: montar diretório de logs
+      - ./worker/logs:/app/logs
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account.json
+      - STORAGE_BUCKET=agendamentointeligente-4405f.firebasestorage.app
+      - NODE_ENV=production
+    networks:
+      - smartdoctor-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "process.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  evolution-worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    container_name: evolution-worker
+    restart: unless-stopped
+    volumes:
+      - /Volumes/MacMini/Projetos/SmartDoctor/worker/agendamentointeligente-4405f-firebase-adminsdk-fbsvc-ee4b0c5b8a.json:/app/service-account.json:ro
+      - ./worker/logs:/app/logs
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account.json
+      - STORAGE_BUCKET=agendamentointeligente-4405f.firebasestorage.app
+      - EVOLUTION_API_URL=${EVOLUTION_API_URL:-http://localhost:8080}
+      - EVOLUTION_API_KEY=${EVOLUTION_API_KEY:-}
+      - EVOLUTION_WEBHOOK_URL=${EVOLUTION_WEBHOOK_URL:-}
+      - NODE_ENV=production
+    command: ["node", "dist/evolution-worker.js"]
+    networks:
+      - smartdoctor-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "process.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  smartdoctor-network:
+    driver: bridge
+

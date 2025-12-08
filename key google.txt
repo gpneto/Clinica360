@@ -1,0 +1,18 @@
+Enter passphrase for "/Users/gpneto/.ssh/google_compute_engine" (empty for no passphrase): 
+Enter same passphrase again: 
+Your identification has been saved in /Users/gpneto/.ssh/google_compute_engine
+Your public key has been saved in /Users/gpneto/.ssh/google_compute_engine.pub
+The key fingerprint is:
+SHA256:0sOvkZLt9SDVXwFtXz8tjb8LDm2v43j9HlRNYb68n4o gpneto@client-19216975168.rodney.lnbgtn.monsterbroadband.com
+The key's randomart image is:
++---[RSA 3072]----+
+|             ..oo|
+|              ++o|
+|              .=B|
+|       o   .  +.O|
+|      . S . .  *o|
+|       + =  ....o|
+|      o = +. +oo.|
+|       o = o*ooo+|
+|        o  E+=+=*|
++----[SHA256]-----+

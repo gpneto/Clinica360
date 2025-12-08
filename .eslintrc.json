@@ -1,0 +1,16 @@
+{
+  "extends": ["next/core-web-vitals"],
+  "rules": {
+    "react/no-unescaped-entities": "off",
+    "@next/next/no-page-custom-font": "off"
+  },
+  "overrides": [
+    {
+      "files": ["functions/**/*"],
+      "rules": {
+        "@next/next/no-html-link-for-pages": "off",
+        "react-hooks/rules-of-hooks": "off"
+      }
+    }
+  ]
+}

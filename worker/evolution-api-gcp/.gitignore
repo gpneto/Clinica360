@@ -1,0 +1,17 @@
+# Arquivo de ambiente com informações sensíveis
+.env
+.env.local
+.env.*.local
+
+# Backups
+.env.backup.*
+
+# Logs
+*.log
+logs/
+
+# Arquivos temporários
+*.tmp
+*.temp
+.DS_Store
+
