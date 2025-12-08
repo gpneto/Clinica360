@@ -420,5 +420,27 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow write: if false; // Apenas Cloud Functions podem escrever
     }
+
+    // ============================================
+    // MÉTRICAS DE IA (APENAS SUPER_ADMIN)
+    // ============================================
+    
+    // AI Metrics (métricas individuais de chamadas de IA)
+    match /aiMetrics/{metricId} {
+      allow read: if isSuperAdmin();
+      allow write: if false; // Apenas Cloud Functions podem escrever
+    }
+
+    // AI Metrics Daily (métricas agregadas diárias)
+    match /aiMetricsDaily/{dailyId} {
+      allow read: if isSuperAdmin();
+      allow write: if false; // Apenas Cloud Functions podem escrever
+    }
+
+    // AI Usage Logs (logs detalhados de uso da IA)
+    match /aiUsageLogs/{logId} {
+      allow read: if isSuperAdmin();
+      allow write: if false; // Apenas Cloud Functions podem escrever
+    }
   }
 }

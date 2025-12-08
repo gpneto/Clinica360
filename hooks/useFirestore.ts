@@ -1685,12 +1685,18 @@ export function useCompanies() {
 
     const unsubscribe = onSnapshot(q, 
       (snapshot) => {
-        const data = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate() || new Date(),
-          updatedAt: doc.data().updatedAt?.toDate() || new Date(),
-        })) as Company[];
+        const data = snapshot.docs.map(doc => {
+          const docData = doc.data();
+          return {
+            id: doc.id,
+            ...docData,
+            createdAt: docData.createdAt?.toDate() || new Date(),
+            updatedAt: docData.updatedAt?.toDate() || new Date(),
+            trialStartedAt: docData.trialStartedAt?.toDate() || undefined,
+            trialEndsAt: docData.trialEndsAt?.toDate() || undefined,
+            subscriptionCurrentPeriodEnd: docData.subscriptionCurrentPeriodEnd?.toDate() || undefined,
+          } as Company;
+        });
         setCompanies(data);
         setLoading(false);
       },

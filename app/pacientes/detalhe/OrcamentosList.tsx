@@ -134,7 +134,7 @@ export function OrcamentosList({
               : 'text-slate-500'
             : 'text-gray-500'
         )}>
-          Os orçamentos criados na Ficha Clínica Odontológica aparecerão aqui
+          Os orçamentos criados no Prontuário aparecerão aqui
         </p>
       </motion.div>
     );

@@ -235,7 +235,7 @@ export interface CalendarEvent {
   appointment?: Appointment;
 }
 
-// Tipos para Ficha Clínica Odontológica
+// Tipos para Prontuário
 export type TipoDenticao = 'permanente' | 'decidua';
 
 export type FaceDente = 'C' | 'D' | 'M' | 'O' | 'P' | 'V';

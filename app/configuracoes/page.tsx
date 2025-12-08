@@ -1760,7 +1760,7 @@ export default function SettingsPage() {
               <div className={cn('flex items-center gap-2', subtleTextClass)}>
                 <Settings className={cn('w-5 h-5', isVibrant ? 'text-slate-600' : 'text-muted-foreground')} />
                 <span className={cn('text-sm', subtleTextClass)}>
-                  Ajuste preferências e integrações do Clínica 360.
+                  Ajuste preferências e integrações do AllOne.
                 </span>
               </div>
               <h1
@@ -1820,7 +1820,7 @@ export default function SettingsPage() {
                         isVibrant ? 'text-indigo-500' : 'text-primary'
                       )}
                     />
-                    Tutorial do Clínica 360
+                    Tutorial do AllOne
                   </CardTitle>
                   <CardDescription className={cn(subtleTextClass)}>
                     Revise o passo a passo do primeiro acesso sempre que precisar relembrar como usar o sistema.
@@ -1883,7 +1883,7 @@ export default function SettingsPage() {
                       id="nome-empresa"
                       value={settings.nomeSalao}
                       onChange={(e) => setSettings(prev => ({ ...prev, nomeSalao: e.target.value }))}
-                      placeholder="Ex: Clínica 360 Clínicas"
+                      placeholder="Ex: AllOne Clínicas"
                     />
                   </div>
                   
@@ -2833,7 +2833,7 @@ export default function SettingsPage() {
                     Migração de Pacientes do Capim
                   </CardTitle>
                   <CardDescription className={cn(subtleTextClass)}>
-                    Importe seus pacientes do sistema Capim para o Clínica 360.
+                    Importe seus pacientes do sistema Capim para o AllOne.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">

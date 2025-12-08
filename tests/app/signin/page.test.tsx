@@ -82,8 +82,8 @@ describe('SignIn Page', () => {
     it('deve exibir o logo e nome da aplicação', () => {
       render(<SignIn />);
 
-      // "Clínica 360" aparece várias vezes, então verificamos que pelo menos uma existe
-      const clinica360Elements = screen.getAllByText('Clínica 360');
+      // "AllOne" aparece várias vezes, então verificamos que pelo menos uma existe
+      const clinica360Elements = screen.getAllByText('AllOne');
       expect(clinica360Elements.length).toBeGreaterThan(0);
     });
 
@@ -131,8 +131,8 @@ describe('SignIn Page', () => {
       render(<SignIn />);
 
       expect(screen.getByText(/Assistente IA Inteligente/i)).toBeInTheDocument();
-      // "Clínica 360" aparece várias vezes, então verificamos que pelo menos uma existe
-      const clinica360Elements = screen.getAllByText(/Clínica 360/i);
+      // "AllOne" aparece várias vezes, então verificamos que pelo menos uma existe
+      const clinica360Elements = screen.getAllByText(/AllOne/i);
       expect(clinica360Elements.length).toBeGreaterThan(0);
       expect(screen.getByText(/Gestão Multi-profissionais/i)).toBeInTheDocument();
       // "Lembretes Automáticos" pode aparecer várias vezes

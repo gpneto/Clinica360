@@ -16,7 +16,7 @@ import {
 
 export const TAB_ITEMS = [
   { id: 'dados_paciente', label: 'Dados do Paciente', icon: Stethoscope },
-  { id: 'ficha_odontologica', label: 'Ficha Clínica Odontológica', icon: Stethoscope, requiresDentist: true as const },
+  { id: 'ficha_odontologica', label: 'Prontuário', icon: Stethoscope, requiresDentist: true as const },
   { id: 'anamnese', label: 'Anamnese', icon: ClipboardList },
   { id: 'evolucoes', label: 'Evoluções', icon: History },
   { id: 'orcamentos', label: 'Orçamentos', icon: Wallet, requiresDebitsPermission: true as const }, // Requer permissão de Débitos

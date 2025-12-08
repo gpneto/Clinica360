@@ -66,9 +66,11 @@ export default function FinancialReportsPage() {
   const singularTitle = customerLabels.singularTitle;
   const pluralTitle = customerLabels.pluralTitle;
   
-  const [period, setPeriod] = useState<'week' | 'month'>('week');
+  const [period, setPeriod] = useState<'week' | 'month' | 'custom'>('week');
   const [selectedWeek, setSelectedWeek] = useState(new Date());
   const [selectedMonth, setSelectedMonth] = useState(new Date());
+  const [customStartDate, setCustomStartDate] = useState<Date>(new Date());
+  const [customEndDate, setCustomEndDate] = useState<Date>(new Date());
   const [reportType, setReportType] = useState<'dashboards' | 'professionals' | 'patients' | 'services'>('dashboards');
   const [showMonthlyForecast, setShowMonthlyForecast] = useState(false);
 
@@ -81,9 +83,13 @@ export default function FinancialReportsPage() {
     if (period === 'week') {
       startDate = moment(selectedWeek).startOf('isoWeek');
       endDate = moment(selectedWeek).endOf('isoWeek');
-    } else {
+    } else if (period === 'month') {
       startDate = moment(selectedMonth).startOf('month');
       endDate = moment(selectedMonth).endOf('month');
+    } else {
+      // Período personalizado
+      startDate = moment(customStartDate).startOf('day');
+      endDate = moment(customEndDate).endOf('day');
     }
     
     return appointments.filter(appointment => {
@@ -91,7 +97,7 @@ export default function FinancialReportsPage() {
       return appointmentDate.isBetween(startDate, endDate, 'day', '[]') &&
              appointment.status === 'concluido';
     });
-  }, [appointments, period, selectedWeek, selectedMonth]);
+  }, [appointments, period, selectedWeek, selectedMonth, customStartDate, customEndDate]);
 
   // Calcular dados financeiros por profissional
   const financialData: FinancialData[] = useMemo(() => {
@@ -360,7 +366,7 @@ export default function FinancialReportsPage() {
     }).format(value / 100);
   };
 
-  const formatDate = (date: Date, type: 'week' | 'month') => {
+  const formatDate = (date: Date, type: 'week' | 'month' | 'custom') => {
     if (type === 'week') {
       const startOfWeek = new Date(date);
       startOfWeek.setDate(date.getDate() - date.getDay());
@@ -370,7 +376,12 @@ export default function FinancialReportsPage() {
       return `${startOfWeek.toLocaleDateString('pt-BR')} - ${endOfWeek.toLocaleDateString('pt-BR')}`;
     }
     
-    return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    if (type === 'month') {
+      return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    }
+    
+    // Período personalizado
+    return `${customStartDate.toLocaleDateString('pt-BR')} - ${customEndDate.toLocaleDateString('pt-BR')}`;
   };
 
   const exportToCSV = () => {
@@ -507,7 +518,10 @@ export default function FinancialReportsPage() {
                   {reportType !== 'dashboards' && (
                     <p className={cn('text-sm mt-0.5 flex items-center gap-2', hasGradient ? 'text-slate-600/80' : 'text-gray-500')}>
                       <Calendar className="w-3 h-3" />
-                      {formatDate(period === 'week' ? selectedWeek : selectedMonth, period)}
+                      {formatDate(
+                        period === 'week' ? selectedWeek : period === 'month' ? selectedMonth : customStartDate,
+                        period
+                      )}
                     </p>
                   )}
                 </div>
@@ -573,7 +587,7 @@ export default function FinancialReportsPage() {
                 <>
                   <div className="flex items-center gap-4">
                     <span className={cn('text-sm font-medium', hasGradient ? 'text-slate-600/90' : 'text-slate-600')}>Período:</span>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                       <button
                         onClick={() => setPeriod('week')}
                         className={cn(
@@ -604,53 +618,118 @@ export default function FinancialReportsPage() {
                       >
                         Mensal
                       </button>
+                      <button
+                        onClick={() => setPeriod('custom')}
+                        className={cn(
+                          'px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200',
+                          period === 'custom'
+                            ? isVibrant
+                              ? 'bg-gradient-to-r from-indigo-500 via-purple-500 to-rose-500 text-white shadow-md'
+                              : 'bg-slate-900 text-white shadow-md'
+                            : isVibrant
+                              ? 'bg-white/40 border border-white/30 text-slate-700 hover:bg-white/60'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        )}
+                      >
+                        Personalizado
+                      </button>
                     </div>
                   </div>
                   
-                  <div className="flex items-center gap-2">
-                    <span className={cn('text-sm font-medium', hasGradient ? 'text-slate-600/90' : 'text-slate-600')}>
-                      {period === 'week' ? 'Semana:' : 'Mês:'}
-                    </span>
-                    <input
-                      type={period === 'week' ? 'week' : 'month'}
-                      value={period === 'week' 
-                        ? (() => {
-                            const weekMoment = moment(selectedWeek);
-                            const weekNumber = weekMoment.isoWeek();
-                            const year = weekMoment.isoWeekYear();
-                            return `${year}-W${String(weekNumber).padStart(2, '0')}`;
-                          })()
-                        : `${selectedMonth.getFullYear()}-${String(selectedMonth.getMonth() + 1).padStart(2, '0')}`
-                      }
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        if (period === 'week') {
-                          // Formato: YYYY-Www
-                          const match = value.match(/^(\d{4})-W(\d{2})$/);
-                          if (match) {
-                            const year = parseInt(match[1], 10);
-                            const week = parseInt(match[2], 10);
-                            const weekStart = moment().isoWeekYear(year).isoWeek(week).startOf('isoWeek');
-                            setSelectedWeek(weekStart.toDate());
-                          }
-                        } else {
-                          // Formato: YYYY-MM
-                          const match = value.match(/^(\d{4})-(\d{2})$/);
-                          if (match) {
-                            const year = parseInt(match[1], 10);
-                            const month = parseInt(match[2], 10) - 1; // month é 0-indexed
-                            setSelectedMonth(new Date(year, month, 1));
-                          }
+                  {period === 'custom' ? (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <span className={cn('text-sm font-medium', hasGradient ? 'text-slate-600/90' : 'text-slate-600')}>
+                          De:
+                        </span>
+                        <input
+                          type="date"
+                          value={customStartDate.toISOString().split('T')[0]}
+                          onChange={(e) => {
+                            const date = new Date(e.target.value);
+                            setCustomStartDate(date);
+                            if (date > customEndDate) {
+                              setCustomEndDate(date);
+                            }
+                          }}
+                          className={cn(
+                            'px-3 py-2 rounded-lg text-sm focus:outline-none transition-all duration-200',
+                            hasGradient
+                              ? 'bg-white/60 border border-white/25 text-slate-800 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-300'
+                              : 'border border-gray-300 focus:ring-2 focus:ring-slate-800 focus:border-slate-800/50'
+                          )}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={cn('text-sm font-medium', hasGradient ? 'text-slate-600/90' : 'text-slate-600')}>
+                          Até:
+                        </span>
+                        <input
+                          type="date"
+                          value={customEndDate.toISOString().split('T')[0]}
+                          onChange={(e) => {
+                            const date = new Date(e.target.value);
+                            setCustomEndDate(date);
+                            if (date < customStartDate) {
+                              setCustomStartDate(date);
+                            }
+                          }}
+                          min={customStartDate.toISOString().split('T')[0]}
+                          className={cn(
+                            'px-3 py-2 rounded-lg text-sm focus:outline-none transition-all duration-200',
+                            hasGradient
+                              ? 'bg-white/60 border border-white/25 text-slate-800 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-300'
+                              : 'border border-gray-300 focus:ring-2 focus:ring-slate-800 focus:border-slate-800/50'
+                          )}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className={cn('text-sm font-medium', hasGradient ? 'text-slate-600/90' : 'text-slate-600')}>
+                        {period === 'week' ? 'Semana:' : 'Mês:'}
+                      </span>
+                      <input
+                        type={period === 'week' ? 'week' : 'month'}
+                        value={period === 'week' 
+                          ? (() => {
+                              const weekMoment = moment(selectedWeek);
+                              const weekNumber = weekMoment.isoWeek();
+                              const year = weekMoment.isoWeekYear();
+                              return `${year}-W${String(weekNumber).padStart(2, '0')}`;
+                            })()
+                          : `${selectedMonth.getFullYear()}-${String(selectedMonth.getMonth() + 1).padStart(2, '0')}`
                         }
-                      }}
-                      className={cn(
-                        'px-3 py-2 rounded-lg text-sm focus:outline-none transition-all duration-200',
-                        hasGradient
-                          ? 'bg-white/60 border border-white/25 text-slate-800 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-300'
-                          : 'border border-gray-300 focus:ring-2 focus:ring-slate-800 focus:border-slate-800/50'
-                      )}
-                    />
-                  </div>
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (period === 'week') {
+                            // Formato: YYYY-Www
+                            const match = value.match(/^(\d{4})-W(\d{2})$/);
+                            if (match) {
+                              const year = parseInt(match[1], 10);
+                              const week = parseInt(match[2], 10);
+                              const weekStart = moment().isoWeekYear(year).isoWeek(week).startOf('isoWeek');
+                              setSelectedWeek(weekStart.toDate());
+                            }
+                          } else {
+                            // Formato: YYYY-MM
+                            const match = value.match(/^(\d{4})-(\d{2})$/);
+                            if (match) {
+                              const year = parseInt(match[1], 10);
+                              const month = parseInt(match[2], 10) - 1; // month é 0-indexed
+                              setSelectedMonth(new Date(year, month, 1));
+                            }
+                          }
+                        }}
+                        className={cn(
+                          'px-3 py-2 rounded-lg text-sm focus:outline-none transition-all duration-200',
+                          hasGradient
+                            ? 'bg-white/60 border border-white/25 text-slate-800 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-300'
+                            : 'border border-gray-300 focus:ring-2 focus:ring-slate-800 focus:border-slate-800/50'
+                        )}
+                      />
+                    </div>
+                  )}
                 </>
               )}
               

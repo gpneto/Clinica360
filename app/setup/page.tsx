@@ -147,16 +147,6 @@ export default function SetupPage() {
         });
       }
 
-      // Atualizar o documento do usuário
-      await setDoc(doc(db, 'users', user!.uid), {
-        nome: user!.displayName || user!.email || 'Usuário',
-        email: (user!.email || '').toLowerCase(),
-        role: role,
-        ativo: true,
-        companyId: companyId,
-        updatedAt: Timestamp.now(),
-      }, { merge: true });
-
       showSuccess('Você foi vinculado à empresa existente!');
       await switchContext({
         companyId: companyId,
@@ -212,15 +202,6 @@ export default function SetupPage() {
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
       });
-
-      await setDoc(doc(db, 'users', user.uid), {
-        nome: user.displayName || companyName,
-        email: (user.email || companyEmail).toLowerCase(),
-        role: 'owner',
-        ativo: true,
-        companyId: companyDoc.id,
-        updatedAt: Timestamp.now(),
-      }, { merge: true });
 
       const defaultSettings = {
         nomeSalao: companyName,

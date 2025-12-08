@@ -146,6 +146,7 @@ export default function AgendaPage() {
   });
   const [showReturnSuggestions, setShowReturnSuggestions] = useState(false);
   const [showHolidays, setShowHolidays] = useState(true);
+  const [showBirthdays, setShowBirthdays] = useState(true);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [companySettings, setCompanySettings] = useState<{ estado?: string } | null>(null);
 
@@ -772,15 +773,8 @@ export default function AgendaPage() {
       };
     });
 
-    // Criar eventos de aniversário baseados nas datas de nascimento dos pacientes
-    const birthdayEvents: typeof mappedEvents = [];
-    
-    // Obter o ano da data que está sendo visualizada no calendário
-    const viewYear = date.getFullYear();
-    const viewMonth = date.getMonth();
-    
     // Calcular o range completo que o calendário mostra (incluindo semanas adjacentes)
-    // Isso garante que aniversários de meses adjacentes também apareçam
+    // Isso garante que aniversários e feriados de meses adjacentes também apareçam
     // O range deve corresponder ao range usado para buscar os appointments
     const calendarMonthStart = startOfMonth(date);
     const calendarMonthEnd = endOfMonth(date);
@@ -791,6 +785,15 @@ export default function AgendaPage() {
     // Normalizar as datas para comparação (sem horas)
     const rangeStartNormalized = startOfDay(calendarRangeStart);
     const rangeEndNormalized = endOfDay(calendarRangeEnd);
+    
+    // Criar eventos de aniversário baseados nas datas de nascimento dos pacientes
+    const birthdayEvents: typeof mappedEvents = [];
+    
+    // Só criar eventos de aniversário se a flag estiver ativada
+    if (showBirthdays) {
+    // Obter o ano da data que está sendo visualizada no calendário
+    const viewYear = date.getFullYear();
+    const viewMonth = date.getMonth();
     
     let pacientesComDataNascimento = 0;
     let aniversariosCriados = 0;
@@ -883,6 +886,7 @@ export default function AgendaPage() {
         }
       }
     });
+    }
     
     // Criar eventos de feriados
     const holidayEvents: typeof mappedEvents = [];
@@ -941,7 +945,7 @@ export default function AgendaPage() {
     const allEvents = [...mappedEvents, ...birthdayEvents, ...holidayEvents];
     
     return allEvents;
-  }, [filteredEvents, patients, professionals, services, singularTitle, date, showHolidays, holidays, companyId]);
+  }, [filteredEvents, patients, professionals, services, singularTitle, date, showHolidays, showBirthdays, holidays, companyId]);
 
   // Refs para os containers do calendário (mobile e desktop)
   const calendarContainerRef = useRef<HTMLDivElement>(null);
@@ -1433,7 +1437,21 @@ export default function AgendaPage() {
                     Feriados
                   </span>
                 </label>
-                {/* Botão Sugerir Retornos Mobile */}
+                {/* Checkbox Aniversários Mobile */}
+                <label className="flex items-center gap-1.5 landscape:gap-1 rounded-full px-2 landscape:px-1.5 py-1 landscape:py-0.5 border backdrop-blur text-xs landscape:text-[10px] cursor-pointer hover:border-primary transition"
+                  style={hasGradient ? { borderColor: 'rgba(255, 255, 255, 0.3)', backgroundColor: 'rgba(255, 255, 255, 0.4)' } : {}}
+                >
+                  <input
+                    type="checkbox"
+                    checked={showBirthdays}
+                    onChange={(e) => setShowBirthdays(e.target.checked)}
+                    className="h-3 w-3 landscape:h-2.5 landscape:w-2.5 rounded border border-input bg-background text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  <span className={cn('font-medium landscape:hidden', 'text-foreground')}>
+                    Aniversários
+                  </span>
+                </label>
+                {/* Botão Retorno Mobile */}
                 <Button
                   variant={showReturnSuggestions ? 'default' : 'outline'}
                   onClick={() => setShowReturnSuggestions(!showReturnSuggestions)}
@@ -1992,6 +2010,17 @@ export default function AgendaPage() {
                       Feriados
                     </span>
                   </label>
+                  <label className="flex items-center gap-2 rounded-lg border border-input/60 bg-muted/20 px-3 py-2 text-sm cursor-pointer hover:border-primary transition">
+                    <input
+                      type="checkbox"
+                      checked={showBirthdays}
+                      onChange={(e) => setShowBirthdays(e.target.checked)}
+                      className="h-4 w-4 rounded border border-input bg-background text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                    <span className="text-sm font-medium text-foreground">
+                      Aniversários
+                    </span>
+                  </label>
                   <Button
                     variant={showReturnSuggestions ? 'default' : 'outline'}
                     onClick={() => setShowReturnSuggestions(!showReturnSuggestions)}
@@ -2008,7 +2037,7 @@ export default function AgendaPage() {
                     style={showReturnSuggestions && isCustom && gradientStyleHorizontal ? gradientStyleHorizontal : undefined}
                   >
                     <Users className="w-4 h-4 mr-2" />
-                    Sugerir Retornos
+                    Retorno
                   </Button>
                   <AdvancedFilters
                     professionals={availableProfessionals}

@@ -39,7 +39,7 @@ export function FichaOdontologicaTab({
     <Card className="bg-white shadow-lg border-0 overflow-visible">
       <CardHeader className="p-4 md:p-6">
         <CardTitle className="text-lg md:text-xl font-semibold text-gray-900">
-          Ficha Clínica Odontológica
+          Prontuário
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0 md:p-6 overflow-visible">

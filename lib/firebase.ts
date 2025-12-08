@@ -73,14 +73,10 @@ export async function loginWithGoogle() {
     if (result.user) {
       const user = result.user;
       
-      // Criar usuário no Firestore se não existir (com allowlist)
-      await createUserIfNotExists({
-        uid: user.uid,
-        email: user.email || '',
-        displayName: user.displayName || ''
-      });
+      // Usuários serão criados apenas em companies/{companyId}/users/
+      // A collection 'users' na raiz será criada manualmente em casos especiais
       
-      // Aguardar um pouco para garantir que o usuário foi criado no Firestore
+      // Aguardar um pouco antes de setar custom claims
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Setar custom claims imediatamente após login
@@ -175,12 +171,8 @@ export async function handleGoogleRedirect() {
     if (result?.user) {
       const user = result.user;
       
-      // Criar usuário no Firestore se não existir (com allowlist)
-      await createUserIfNotExists({
-        uid: user.uid,
-        email: user.email || '',
-        displayName: user.displayName || ''
-      });
+      // Usuários serão criados apenas em companies/{companyId}/users/
+      // A collection 'users' na raiz será criada manualmente em casos especiais
       
       // Setar custom claims imediatamente após login
       // IMPORTANTE: Se o usuário tem contexto salvo (empresa selecionada), usar esse contexto
@@ -222,58 +214,9 @@ export async function handleGoogleRedirect() {
   }
 }
 
-async function createUserIfNotExists(
-  userData: { uid: string; email: string; displayName: string },
-  options?: {
-    skipAllowlist?: boolean;
-    defaultRole?: string;
-    defaultAtivo?: boolean;
-  }
-) {
-  const { doc, getDoc, setDoc, serverTimestamp } = await import('firebase/firestore');
-  const userDocRef = doc(db, 'users', userData.uid);
-  const userDoc = await getDoc(userDocRef);
-  
-  if (!userDoc.exists()) {
-    if (options?.skipAllowlist) {
-      await setDoc(userDocRef, {
-        nome: userData.displayName || '',
-        email: userData.email.toLowerCase(),
-        role: options?.defaultRole || 'pro',
-        professionalId: null,
-        ativo: options?.defaultAtivo ?? true,
-        createdAt: serverTimestamp(),
-      });
-      return;
-    }
-
-    // Verificar se o usuário está na allowlist
-    const allowlistDocRef = doc(db, 'allowlist', userData.email.toLowerCase());
-    const allowlistDoc = await getDoc(allowlistDocRef);
-    
-    if (!allowlistDoc.exists()) {
-      // Usuário não está na allowlist - criar como bloqueado com permissão mínima
-      await setDoc(userDocRef, {
-        nome: userData.displayName || '',
-        email: userData.email.toLowerCase(),
-        role: 'atendente',
-        ativo: false, // Usuário bloqueado por padrão
-        createdAt: serverTimestamp(),
-      });
-    } else {
-      // Usuário está na allowlist - criar com role da allowlist
-      const allowlistData = allowlistDoc.data();
-      await setDoc(userDocRef, {
-        nome: userData.displayName || '',
-        email: userData.email.toLowerCase(),
-        role: allowlistData?.role || 'pro',
-        professionalId: allowlistData?.professionalId || null,
-        ativo: true,
-        createdAt: serverTimestamp(),
-      });
-    }
-  }
-}
+// Função removida: createUserIfNotExists
+// Usuários agora são criados apenas em companies/{companyId}/users/
+// A collection 'users' na raiz será criada manualmente em casos especiais
 
 export async function registerWithEmail({
   email,
@@ -290,18 +233,9 @@ export async function registerWithEmail({
       if (nome) {
         await updateProfile(credential.user, { displayName: nome });
       }
-      await createUserIfNotExists(
-        {
-          uid: credential.user.uid,
-          email: credential.user.email || email,
-          displayName: nome || credential.user.displayName || '',
-        },
-        {
-          skipAllowlist: true,
-          defaultRole: 'owner',
-          defaultAtivo: true,
-        }
-      );
+      
+      // Usuários serão criados apenas em companies/{companyId}/users/
+      // A collection 'users' na raiz será criada manualmente em casos especiais
       
       // Setar custom claims imediatamente após registro
       try {
@@ -333,18 +267,8 @@ export async function loginWithEmail({
   try {
     const credential = await signInWithEmailAndPassword(auth, email, password);
     if (credential.user) {
-      await createUserIfNotExists(
-        {
-          uid: credential.user.uid,
-          email: credential.user.email || email,
-          displayName: credential.user.displayName || '',
-        },
-        {
-          skipAllowlist: true,
-          defaultRole: 'owner',
-          defaultAtivo: true,
-        }
-      );
+      // Usuários serão criados apenas em companies/{companyId}/users/
+      // A collection 'users' na raiz será criada manualmente em casos especiais
       
       // Setar custom claims imediatamente após login
       // IMPORTANTE: Se o usuário tem contexto salvo (empresa selecionada), usar esse contexto

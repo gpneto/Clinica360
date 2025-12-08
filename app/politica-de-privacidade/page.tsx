@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Política de Privacidade | Clínica 360',
+  title: 'Política de Privacidade | AllOne',
   description:
-    'Conheça como a Clínica 360 coleta, utiliza e protege os seus dados pessoais para oferecer uma experiência segura e transparente.',
+    'Conheça como a AllOne coleta, utiliza e protege os seus dados pessoais para oferecer uma experiência segura e transparente.',
 };
 
 export default function PoliticaDePrivacidadePage() {
@@ -19,7 +19,7 @@ export default function PoliticaDePrivacidadePage() {
           </p>
         </div>
         <p className="text-base leading-relaxed text-slate-700">
-          A Clínica 360 valoriza a proteção dos dados pessoais de clientes,
+          A AllOne valoriza a proteção dos dados pessoais de clientes,
           pacientes e profissionais. Esta Política de Privacidade descreve de
           forma transparente como coletamos, utilizamos, armazenamos e
           compartilhamos as informações durante o uso da nossa plataforma de
@@ -60,7 +60,7 @@ export default function PoliticaDePrivacidadePage() {
           Utilizamos os dados pessoais para:
         </p>
         <ul className="list-disc pl-6 space-y-2 text-base text-slate-700">
-          <li>Fornecer, operar e aprimorar a plataforma Clínica 360.</li>
+          <li>Fornecer, operar e aprimorar a plataforma AllOne.</li>
           <li>
             Personalizar a experiência de usuários, conforme seus
             consentimentos.
@@ -81,7 +81,7 @@ export default function PoliticaDePrivacidadePage() {
           3. Compartilhamento de dados
         </h2>
         <p className="text-base leading-relaxed text-slate-700">
-          A Clínica 360 não comercializa dados pessoais. Podemos compartilhar
+          A AllOne não comercializa dados pessoais. Podemos compartilhar
           informações com terceiros estritamente necessários para a prestação
           dos serviços, tais como provedores de hospedagem, ferramentas de
           comunicação e integrações autorizadas pelo usuário. Todo

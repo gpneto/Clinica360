@@ -1,4 +1,4 @@
-# 🏥 SmartDoctor / Clínica360
+# 🏥 SmartDoctor / AllOne
 
 Sistema completo de gestão para clínicas, consultórios e estabelecimentos de saúde. Plataforma moderna e escalável desenvolvida com Next.js 15, React 19, TypeScript e Firebase, oferecendo uma solução robusta para gerenciamento de agendamentos, pacientes, prontuário eletrônico, finanças e comunicação automatizada.
 

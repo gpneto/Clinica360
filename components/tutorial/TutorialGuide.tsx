@@ -146,7 +146,7 @@ export function TutorialGuide() {
                 <div className="space-y-1">
                   <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary">
                     <Sparkles className="h-3 w-3" />
-                    Tutorial Clínica 360
+                    Tutorial AllOne
                   </p>
                   <div>
                     <p className="text-xs text-muted-foreground">

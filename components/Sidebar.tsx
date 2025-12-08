@@ -26,7 +26,8 @@ import {
   MessageCircle,
   FileText,
   CreditCard,
-  HelpCircle
+  HelpCircle,
+  Activity
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { logout } from '@/lib/firebase';
@@ -51,6 +52,8 @@ interface NavigationItem {
 }
 
 const navigation: NavigationItem[] = [
+  { name: 'Painel Admin', href: '/admin', icon: Activity, roles: ['super_admin'] },
+  { name: 'Leads', href: '/admin/leads', icon: Users, roles: ['super_admin'] },
   { name: 'Empresas', href: '/admin/empresas', icon: Building2, roles: ['super_admin'] },
   { 
     name: 'Inicial', 
@@ -427,7 +430,7 @@ export function Sidebar() {
                 </div>
               )}
               <div>
-                <h1 className="text-sm font-semibold text-slate-900">Clínica 360</h1>
+                <h1 className="text-sm font-semibold text-slate-900">AllOne</h1>
                 <p className={cn('text-xs', hasGradient ? 'text-slate-600' : 'text-slate-500')}>Portal de Gestão</p>
               </div>
             </div>
@@ -845,7 +848,7 @@ export function Sidebar() {
                   )}
                 >
                   <RefreshCw className="w-5 h-5" />
-                  Trocar Contexto
+                  Trocar Empresa/Perfil
                 </Button>
               </motion.div>
             </div>

@@ -57,7 +57,13 @@ export function DashboardCharts() {
   const singularTitle = customerLabels.singularTitle;
   const pluralTitle = customerLabels.pluralTitle;
 
-  const [period, setPeriod] = useState<'week' | 'month' | 'quarter'>('month');
+  const [period, setPeriod] = useState<'week' | 'month' | 'quarter' | 'custom'>('month');
+  const [customStartDate, setCustomStartDate] = useState<Date>(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 30); // Últimos 30 dias por padrão
+    return date;
+  });
+  const [customEndDate, setCustomEndDate] = useState<Date>(new Date());
 
   // Cores para gráficos baseadas no tema
   const colors = useMemo(() => {
@@ -84,24 +90,29 @@ export function DashboardCharts() {
   const filteredAppointments = useMemo(() => {
     const now = moment();
     let startDate: moment.Moment;
+    let endDate: moment.Moment = now;
     
     if (period === 'week') {
       startDate = moment().subtract(7, 'days');
     } else if (period === 'month') {
       startDate = moment().subtract(30, 'days');
-    } else {
+    } else if (period === 'quarter') {
       startDate = moment().subtract(90, 'days');
+    } else {
+      // Período personalizado
+      startDate = moment(customStartDate).startOf('day');
+      endDate = moment(customEndDate).endOf('day');
     }
     
     return appointments.filter(appointment => {
       if (appointment.isBlock) return false;
       const appointmentDate = moment(appointment.inicio);
-      return appointmentDate.isAfter(startDate) && 
-             appointmentDate.isBefore(now) &&
+      return appointmentDate.isSameOrAfter(startDate) && 
+             appointmentDate.isSameOrBefore(endDate) &&
              appointment.status === 'concluido' &&
              appointment.clientePresente !== false;
     });
-  }, [appointments, period]);
+  }, [appointments, period, customStartDate, customEndDate]);
 
   // 1. Gráfico de Linha - Receita ao longo do tempo (últimos 30 dias)
   const revenueOverTime = useMemo(() => {
@@ -354,8 +365,8 @@ export function DashboardCharts() {
             </div>
           </div>
           
-          <div className="flex gap-2 flex-wrap">
-            {(['week', 'month', 'quarter'] as const).map((p) => (
+          <div className="flex gap-2 flex-wrap items-center">
+            {(['week', 'month', 'quarter', 'custom'] as const).map((p) => (
               <button
                 key={p}
                 onClick={() => setPeriod(p)}
@@ -373,9 +384,58 @@ export function DashboardCharts() {
                 )}
                 style={period === p && hasGradient && gradientStyle ? gradientStyle : undefined}
               >
-                {p === 'week' ? '7 dias' : p === 'month' ? '30 dias' : '90 dias'}
+                {p === 'week' ? '7 dias' : p === 'month' ? '30 dias' : p === 'quarter' ? '90 dias' : 'Personalizado'}
               </button>
             ))}
+            {period === 'custom' && (
+              <div className="flex items-center gap-2 flex-wrap ml-2">
+                <div className="flex items-center gap-2">
+                  <span className={cn('text-sm font-medium', isVibrant ? 'text-slate-700' : 'text-gray-700')}>
+                    De:
+                  </span>
+                  <input
+                    type="date"
+                    value={customStartDate.toISOString().split('T')[0]}
+                    onChange={(e) => {
+                      const date = new Date(e.target.value);
+                      setCustomStartDate(date);
+                      if (date > customEndDate) {
+                        setCustomEndDate(date);
+                      }
+                    }}
+                    className={cn(
+                      'px-3 py-2 rounded-lg text-sm focus:outline-none transition-all duration-200',
+                      isVibrant
+                        ? 'bg-white/60 border border-white/30 text-slate-800 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-300'
+                        : 'border border-gray-300 focus:ring-2 focus:ring-slate-800 focus:border-slate-800/50'
+                    )}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={cn('text-sm font-medium', isVibrant ? 'text-slate-700' : 'text-gray-700')}>
+                    Até:
+                  </span>
+                  <input
+                    type="date"
+                    value={customEndDate.toISOString().split('T')[0]}
+                    onChange={(e) => {
+                      const date = new Date(e.target.value);
+                      setCustomEndDate(date);
+                      if (date < customStartDate) {
+                        setCustomStartDate(date);
+                      }
+                    }}
+                    min={customStartDate.toISOString().split('T')[0]}
+                    className={cn(
+                      'px-3 py-2 rounded-lg text-sm focus:outline-none transition-all duration-200',
+                      isVibrant
+                        ? 'bg-white/60 border border-white/30 text-slate-800 focus:ring-2 focus:ring-indigo-400 focus:border-indigo-300'
+                        : 'border border-gray-300 focus:ring-2 focus:ring-slate-800 focus:border-slate-800/50'
+                    )}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </motion.div>

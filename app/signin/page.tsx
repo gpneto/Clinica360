@@ -83,7 +83,7 @@ export default function SignIn() {
     },
     {
       icon: Calendar,
-      title: 'Clínica 360',
+      title: 'AllOne',
       description: 'Sistema de agenda completo com múltiplos profissionais e visualizações personalizadas.',
     },
     {
@@ -159,7 +159,7 @@ export default function SignIn() {
               <div className="w-10 h-10 bg-gradient-to-br from-slate-700 to-slate-900 rounded-xl flex items-center justify-center">
                 <Sparkles className="w-6 h-6 text-white" />
               </div>
-              <span className="text-xl font-bold text-slate-900">Clínica 360</span>
+              <span className="text-xl font-bold text-slate-900">AllOne</span>
             </div>
             <div className="flex items-center gap-4">
               <Button
@@ -502,7 +502,7 @@ export default function SignIn() {
                 Conheça o sistema
               </h2>
               <p className="text-xl text-slate-600 max-w-2xl mx-auto">
-                Veja na prática como o Clínica 360 pode transformar a gestão do seu negócio
+                Veja na prática como o AllOne pode transformar a gestão do seu negócio
               </p>
             </motion.div>
 
@@ -740,7 +740,7 @@ export default function SignIn() {
                 Resultados que fazem a diferença
               </h2>
               <p className="text-xl text-slate-600 mb-8 leading-relaxed">
-                Veja os benefícios que profissionais como você estão alcançando com o Clínica 360
+                Veja os benefícios que profissionais como você estão alcançando com o AllOne
               </p>
               <div className="space-y-4">
                 {benefits.map((benefit, index) => (
@@ -837,10 +837,10 @@ export default function SignIn() {
               <div className="w-8 h-8 bg-gradient-to-br from-slate-700 to-slate-900 rounded-lg flex items-center justify-center">
                 <Sparkles className="w-5 h-5 text-white" />
               </div>
-              <span className="text-lg font-bold text-slate-900">Clínica 360</span>
+              <span className="text-lg font-bold text-slate-900">AllOne</span>
             </div>
             <p className="text-sm text-slate-600 text-center">
-              © {new Date().getFullYear()} Clínica 360. Todos os direitos reservados.
+              © {new Date().getFullYear()} AllOne. Todos os direitos reservados.
             </p>
           </div>
         </div>

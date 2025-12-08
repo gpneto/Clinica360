@@ -9,7 +9,7 @@ import { IosPreventZoom } from '@/components/IosPreventZoom';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Clínica 360',
+  title: 'AllOne',
   description: 'Sistema de agendamento multi-profissionais com finanças e lembretes automáticos',
 };
 
