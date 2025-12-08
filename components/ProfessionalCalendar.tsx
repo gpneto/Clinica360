@@ -177,7 +177,7 @@ export function ProfessionalCalendar({
   const [currentTime, setCurrentTime] = useState(new Date());
   const [birthdayModalOpen, setBirthdayModalOpen] = useState(false);
   const [selectedBirthdayEvent, setSelectedBirthdayEvent] = useState<CalendarEvent | null>(null);
-  const [hourCellHeight, setHourCellHeight] = useState<number>(64); // Altura padrão de h-16 (4rem) em desktop
+  const [hourCellHeight, setHourCellHeight] = useState<number>(112); // Altura padrão de h-28 (7rem) em desktop
   const touchTimerRef = useRef<number | null>(null);
   const longPressTriggeredRef = useRef(false);
   const pendingDateRef = useRef<Date | null>(null);
@@ -350,10 +350,10 @@ export function ProfessionalCalendar({
 
   // Medir altura real da célula de hora no mobile (font-size pode ser diferente)
   useEffect(() => {
-    // Criar elemento temporário para medir a altura real do h-16
+    // Criar elemento temporário para medir a altura real do h-28
     const measureHourHeight = () => {
       const tempEl = document.createElement('div');
-      tempEl.className = 'h-16';
+      tempEl.className = 'h-28';
       tempEl.style.position = 'absolute';
       tempEl.style.visibility = 'hidden';
       tempEl.style.pointerEvents = 'none';
@@ -363,7 +363,7 @@ export function ProfessionalCalendar({
       document.body.removeChild(tempEl);
       
       
-      setHourCellHeight(height || 64); // Fallback para 64px se não conseguir medir
+      setHourCellHeight(height || 112); // Fallback para 112px se não conseguir medir
     };
 
     measureHourHeight();
@@ -1120,7 +1120,7 @@ export function ProfessionalCalendar({
               {dynamicHours.map((hour) => (
                 <div
                   key={hour}
-                  className="h-16 border-b border-slate-100 flex items-start justify-end pr-2 pt-1"
+                  className="h-28 border-b border-slate-100 flex items-start justify-end pr-2 pt-1"
                 >
                   <span className="text-xs text-slate-500">
                     {String(hour).padStart(2, '0')}:00
@@ -1206,11 +1206,34 @@ export function ProfessionalCalendar({
                       // Tentar colocar em uma coluna existente
                       for (let i = 0; i < columns.length; i++) {
                         const canPlace = columns[i].every((existingEvent) => {
-                          // Verificar se não há sobreposição
-                          return (
-                            event.endDate <= existingEvent.startDate ||
-                            event.startDate >= existingEvent.endDate
+                          const eventStart = event.startDate.getTime();
+                          const eventEnd = event.endDate.getTime();
+                          const existingStart = existingEvent.startDate.getTime();
+                          const existingEnd = existingEvent.endDate.getTime();
+                          
+                          // Verificar se não há sobreposição temporal (eventos não se tocam)
+                          const noTimeOverlap = (
+                            eventEnd <= existingStart ||
+                            eventStart >= existingEnd
                           );
+                          
+                          // Se não há sobreposição temporal, verificar se estão suficientemente separados
+                          if (noTimeOverlap) {
+                            // Calcular a diferença mínima entre os eventos
+                            const gapBefore = existingStart - eventEnd;
+                            const gapAfter = eventStart - existingEnd;
+                            const minGap = Math.min(
+                              gapBefore > 0 ? gapBefore : Infinity,
+                              gapAfter > 0 ? gapAfter : Infinity
+                            );
+                            
+                            // Se há um gap de pelo menos 15 minutos (900000ms), pode colocar na mesma coluna
+                            // Caso contrário, colocar em coluna diferente para evitar sobreposição visual
+                            return minGap >= 15 * 60 * 1000;
+                          }
+                          
+                          // Se há sobreposição temporal (mesmo que parcial), sempre colocar em coluna diferente
+                          return false;
                         });
                         
                         if (canPlace) {
@@ -1280,7 +1303,9 @@ export function ProfessionalCalendar({
                       // Calcular altura baseada na duração real em minutos
                       const totalHeight = (durationMinutes / 60) * hourCellHeight;
                       
-                      const height = Math.max(totalHeight, 32);
+                      // Altura mínima reduzida para ser mais proporcional à duração
+                      // Para eventos de 15 minutos: (15/60) * 80 = 20px, usamos mínimo de 35px para garantir legibilidade
+                      const height = Math.max(totalHeight, 35);
                       
                       // Debug: verificar altura calculada
                       if (event.id === 'nQF3ksroK4SxJZuYPcLF') {
@@ -1419,7 +1444,7 @@ export function ProfessionalCalendar({
                   {dynamicHours.map((hour) => (
                     <div
                       key={hour}
-                      className="h-16 border-b border-slate-100 relative"
+                      className="h-28 border-b border-slate-100 relative"
                       style={{ pointerEvents: 'auto' }}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -1617,7 +1642,7 @@ export function ProfessionalCalendar({
               {dynamicHours.map((hour) => (
                 <div
                   key={hour}
-                  className="h-16 border-b border-slate-100 flex items-start justify-end pr-2 pt-1"
+                  className="h-28 border-b border-slate-100 flex items-start justify-end pr-2 pt-1"
                 >
                   <span className="text-xs text-slate-500">
                     {String(hour).padStart(2, '0')}:00
@@ -1680,11 +1705,34 @@ export function ProfessionalCalendar({
                       // Tentar colocar em uma coluna existente
                       for (let i = 0; i < columns.length; i++) {
                         const canPlace = columns[i].every((existingEvent) => {
-                          // Verificar se não há sobreposição
-                          return (
-                            event.endDate <= existingEvent.startDate ||
-                            event.startDate >= existingEvent.endDate
+                          const eventStart = event.startDate.getTime();
+                          const eventEnd = event.endDate.getTime();
+                          const existingStart = existingEvent.startDate.getTime();
+                          const existingEnd = existingEvent.endDate.getTime();
+                          
+                          // Verificar se não há sobreposição temporal (eventos não se tocam)
+                          const noTimeOverlap = (
+                            eventEnd <= existingStart ||
+                            eventStart >= existingEnd
                           );
+                          
+                          // Se não há sobreposição temporal, verificar se estão suficientemente separados
+                          if (noTimeOverlap) {
+                            // Calcular a diferença mínima entre os eventos
+                            const gapBefore = existingStart - eventEnd;
+                            const gapAfter = eventStart - existingEnd;
+                            const minGap = Math.min(
+                              gapBefore > 0 ? gapBefore : Infinity,
+                              gapAfter > 0 ? gapAfter : Infinity
+                            );
+                            
+                            // Se há um gap de pelo menos 15 minutos (900000ms), pode colocar na mesma coluna
+                            // Caso contrário, colocar em coluna diferente para evitar sobreposição visual
+                            return minGap >= 15 * 60 * 1000;
+                          }
+                          
+                          // Se há sobreposição temporal (mesmo que parcial), sempre colocar em coluna diferente
+                          return false;
                         });
                         
                         if (canPlace) {
@@ -1754,7 +1802,9 @@ export function ProfessionalCalendar({
                   // Calcular altura baseada na duração real em minutos
                   const totalHeight = (durationMinutes / 60) * hourCellHeight;
                   
-                  const height = Math.max(totalHeight, 32);
+                  // Altura mínima reduzida para ser mais proporcional à duração
+                  // Para eventos de 15 minutos: (15/60) * 80 = 20px, usamos mínimo de 35px para garantir legibilidade
+                  const height = Math.max(totalHeight, 35);
                       
                       // Calcular largura e posição baseado na coluna
                       const widthPercent = 100 / totalColumns;
@@ -1893,7 +1943,7 @@ export function ProfessionalCalendar({
                   {dynamicHours.map((hour) => (
                     <div
                       key={hour}
-                      className="h-16 border-b border-slate-100 relative"
+                      className="h-28 border-b border-slate-100 relative"
                       style={{ pointerEvents: 'auto' }}
                       onClick={(e) => {
                         e.stopPropagation();
