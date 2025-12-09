@@ -130,6 +130,9 @@ export function FinanceiroTab({
 
   // Filtrar serviços
   const filteredServices = useMemo(() => {
+    // Filtrar apenas serviços ativos
+    const activeServices = services.filter(s => s.ativo);
+    
     const normalizeString = (value: string) =>
       value
         .normalize('NFD')
@@ -138,8 +141,8 @@ export function FinanceiroTab({
 
     const term = serviceQuery.trim();
     const normalizedTerm = normalizeString(term);
-    if (!normalizedTerm) return services;
-    const result = services.filter((service) => {
+    if (!normalizedTerm) return activeServices;
+    const result = activeServices.filter((service) => {
       const name = service.nome ? normalizeString(service.nome) : '';
       return name.includes(normalizedTerm);
     });
@@ -1921,7 +1924,9 @@ export function FinanceiroTab({
                     .toLowerCase();
                 
                 const queryNormalized = normalizeString(serviceQueryEditar);
-                const filtered = services.filter((service) =>
+                // Filtrar apenas serviços ativos
+                const activeServices = services.filter(s => s.ativo);
+                const filtered = activeServices.filter((service) =>
                   normalizeString(service.nome).includes(queryNormalized)
                 );
                 

@@ -315,10 +315,13 @@ export function MobileAppointmentForm({
         .replace(/[\u0300-\u036f]/g, '')
         .toLowerCase();
 
+    // Filtrar apenas serviços ativos
+    const activeServices = services.filter(s => s.ativo);
+
     const term = serviceQuery.trim();
     const normalizedTerm = normalizeString(term);
-    if (!normalizedTerm) return services;
-    const result = services.filter((service) => {
+    if (!normalizedTerm) return activeServices;
+    const result = activeServices.filter((service) => {
       const name = service.nome ? normalizeString(service.nome) : '';
       return name.includes(normalizedTerm);
     });

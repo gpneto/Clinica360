@@ -7,6 +7,7 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  setDoc,
   getDocs,
   getDoc,
   onSnapshot,
@@ -175,52 +176,319 @@ export function useServices(companyId: string | null | undefined) {
     }
 
     const collectionPath = `companies/${companyId}/services`;
+    let servicesUnsubscribe: (() => void) | null = null;
+    let templatesStatusUnsubscribe: (() => void) | null = null;
+    let templatesEditedUnsubscribe: (() => void) | null = null;
+    let isMounted = true;
     
-    // Tentar obter do cache primeiro
-    const cachedData = firestoreCache.getQuery<Service[]>(
-      collectionPath,
-      undefined,
-      'nome'
-    );
-    
-    if (cachedData) {
-      setServices(cachedData);
+    // Função para carregar e combinar serviços
+    const loadServices = async (companyData: any, companyServices: Service[]) => {
+      console.log('[loadServices] Iniciando carregamento...', { 
+        companyServicesCount: companyServices.length,
+        isMounted 
+      });
+      
+      if (!isMounted) {
+        console.log('[loadServices] Componente desmontado, cancelando');
+        return;
+      }
+      
+      const isDentista = companyData?.tipoEstabelecimento === 'dentista';
+      console.log('[loadServices] É dentista?', isDentista);
+      let allServices = [...companyServices];
+
+            // Se for dentista, buscar templates e status de templates
+            if (isDentista) {
+              try {
+                // Buscar status dos templates para esta empresa
+                const templatesStatusRef = doc(db, `companies/${companyId}/settings`, 'dental_templates_status');
+                const templatesStatusDoc = await getDoc(templatesStatusRef);
+                const templatesStatus = templatesStatusDoc.exists() 
+                  ? (templatesStatusDoc.data().templates || {}) as Record<string, boolean>
+                  : {};
+                
+                // Buscar campos editados dos templates
+                const templatesEditedRef = doc(db, `companies/${companyId}/settings`, 'dental_templates_edited');
+                const templatesEditedDoc = await getDoc(templatesEditedRef);
+                const templatesEdited = templatesEditedDoc.exists() 
+                  ? (templatesEditedDoc.data().templates || {}) as Record<string, {
+                      duracaoMin?: number;
+                      precoCentavos?: number;
+                      comissaoPercent?: number;
+                    }>
+                  : {};
+                
+                console.log('[loadServices] Status dos templates carregado:', templatesStatus);
+                console.log('[loadServices] Campos editados dos templates:', templatesEdited);
+
+                // Buscar templates dentais
+                const templatesQuery = query(
+                  collection(db, 'dental_procedures_templates'),
+                  where('ativo', '==', true)
+                );
+                const templatesSnapshot = await getDocs(templatesQuery);
+                
+                console.log('[loadServices] Total de templates encontrados:', templatesSnapshot.docs.length);
+                
+                const templates = templatesSnapshot.docs
+                  .map(templateDoc => {
+                    const templateData = templateDoc.data();
+                    const templateId = templateDoc.id;
+                    
+                    // Se não estiver no status, assume true (ativo por padrão)
+                    // Se estiver explicitamente false, está desativado
+                    const templateStatus = templatesStatus[templateId];
+                    const isActive = templateStatus === undefined ? true : templateStatus !== false;
+                    
+                    // Aplicar campos editados se existirem
+                    const editedFields = templatesEdited[templateId] || {};
+                    
+                    console.log(`[loadServices] Template ${templateId}: status=${templateStatus}, isActive=${isActive}, editedFields=`, editedFields);
+                    
+                    return {
+                      id: `template_${templateId}`, // Prefixo para identificar como template
+                      companyId: companyId,
+                      nome: templateData.nome || '',
+                      duracaoMin: editedFields.duracaoMin !== undefined ? editedFields.duracaoMin : (templateData.duracaoMin || 60),
+                      precoCentavos: editedFields.precoCentavos !== undefined ? editedFields.precoCentavos : 0,
+                      comissaoPercent: editedFields.comissaoPercent !== undefined ? editedFields.comissaoPercent : 0,
+                      ativo: isActive,
+                      isTemplate: true,
+                      templateId: templateId
+                    } as Service;
+                  })
+                  .sort((a, b) => a.nome.localeCompare(b.nome)); // Ordenar em memória (mantém todos, ativos e inativos)
+          
+          console.log('[loadServices] Total de templates (ativos e inativos):', templates.length);
+          console.log('[loadServices] Templates ativos:', templates.filter(t => t.ativo).length);
+          const inactiveTemplates = templates.filter(t => !t.ativo);
+          console.log('[loadServices] Templates inativos:', inactiveTemplates.length);
+          if (inactiveTemplates.length > 0) {
+            console.log('[loadServices] Templates inativos detalhados:', inactiveTemplates.map(t => ({ id: t.id, nome: t.nome, templateId: t.templateId, ativo: t.ativo })));
+          }
+
+                // Combinar serviços da empresa com templates
+                allServices = [...companyServices, ...templates];
+                
+                // Ordenar por nome
+                allServices.sort((a, b) => a.nome.localeCompare(b.nome));
+              } catch (err) {
+                console.error('[loadServices] Erro ao buscar templates dentais:', err);
+                // Em caso de erro, usar apenas serviços da empresa
+              }
+            }
+      
+      if (!isMounted) return;
+      
+      // Atualizar cache
+      firestoreCache.setQuery(
+        collectionPath,
+        companyServices, // Cache apenas os serviços da empresa
+        undefined,
+        'nome',
+        CACHE_TTL.SERVICE
+      );
+      
+      console.log('[loadServices] Total de serviços finais:', allServices.length);
+      console.log('[loadServices] Serviços ativos:', allServices.filter(s => s.ativo).length);
+      console.log('[loadServices] Serviços inativos:', allServices.filter(s => !s.ativo).length);
+      console.log('[loadServices] Serviços inativos detalhados:', allServices.filter(s => !s.ativo).map(s => ({ id: s.id, nome: s.nome, isTemplate: s.isTemplate })));
+      console.log('[loadServices] Atualizando estado com serviços:', allServices.map(s => ({ id: s.id, nome: s.nome, ativo: s.ativo })));
+      
+      setServices(allServices);
       setLoading(false);
-    }
-
-    // Adicionar filtro de companyId para segurança extra
-    // Query já está isolada pelo caminho companies/${companyId}/services
-    const q = query(
-      collection(db, collectionPath),
-      orderBy('nome', 'asc')
-    );
-
-    const unsubscribe = onSnapshot(q, 
-      (snapshot) => {
-        const data = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Service[];
+      console.log('[loadServices] Estado atualizado');
+    };
+    
+    // Buscar dados da empresa para verificar se é dentista
+    const companyUnsubscribe = onSnapshot(
+      doc(db, 'companies', companyId),
+      async (companyDoc) => {
+        if (!isMounted) return;
         
-        // Atualizar cache
-        firestoreCache.setQuery(
-          collectionPath,
-          data,
-          undefined,
-          'nome',
-          CACHE_TTL.SERVICE
+        if (!companyDoc.exists()) {
+          if (isMounted) {
+            setServices([]);
+            setLoading(false);
+          }
+          return;
+        }
+
+        const companyData = companyDoc.data();
+        const isDentista = companyData?.tipoEstabelecimento === 'dentista';
+
+        // Buscar serviços da empresa
+        const q = query(
+          collection(db, collectionPath),
+          orderBy('nome', 'asc')
         );
-        
-        setServices(data);
-        setLoading(false);
+
+        // Cancelar subscription anterior se existir
+        if (servicesUnsubscribe) {
+          servicesUnsubscribe();
+        }
+
+        servicesUnsubscribe = onSnapshot(q, 
+          async (snapshot) => {
+            console.log('[useServices] onSnapshot disparado, documentos:', snapshot.docs.length);
+            if (!isMounted) {
+              console.log('[useServices] Componente desmontado, ignorando atualização');
+              return;
+            }
+            
+            const companyServices = snapshot.docs.map(doc => {
+              const data = doc.data();
+              const service = {
+                id: doc.id,
+                nome: data.nome || '',
+                duracaoMin: data.duracaoMin || 60,
+                precoCentavos: data.precoCentavos || 0,
+                comissaoPercent: data.comissaoPercent || 0,
+                ativo: data.ativo !== undefined ? data.ativo : true, // Garantir que ativo seja boolean
+                companyId: companyId,
+                isTemplate: false
+              } as Service;
+              if (!service.ativo) {
+                console.log(`[useServices] ⚠️ Serviço INATIVO carregado: ${service.nome} (ativo: ${service.ativo}, raw: ${data.ativo})`);
+              }
+              return service;
+            });
+            
+            const inactiveCompanyServices = companyServices.filter(s => !s.ativo);
+            console.log(`[useServices] Serviços da empresa - Total: ${companyServices.length}, Ativos: ${companyServices.filter(s => s.ativo).length}, Inativos: ${inactiveCompanyServices.length}`);
+            if (inactiveCompanyServices.length > 0) {
+              console.log(`[useServices] Serviços inativos da empresa:`, inactiveCompanyServices.map(s => ({ id: s.id, nome: s.nome, ativo: s.ativo })));
+            }
+
+            console.log('[useServices] Total de serviços da empresa:', companyServices.length);
+            await loadServices(companyData, companyServices);
+          },
+          (err) => {
+            if (isMounted) {
+              setError(err.message);
+              setLoading(false);
+            }
+          }
+        );
+
+        // Se for dentista, também escutar mudanças no status e campos editados dos templates
+        if (isDentista) {
+          if (templatesStatusUnsubscribe) {
+            templatesStatusUnsubscribe();
+          }
+          if (templatesEditedUnsubscribe) {
+            templatesEditedUnsubscribe();
+          }
+
+          const templatesStatusRef = doc(db, `companies/${companyId}/settings`, 'dental_templates_status');
+          const templatesEditedRef = doc(db, `companies/${companyId}/settings`, 'dental_templates_edited');
+          
+          console.log('[useServices] Configurando listeners para templatesStatusRef e templatesEditedRef');
+          
+          // Listener para status dos templates
+          templatesStatusUnsubscribe = onSnapshot(templatesStatusRef, async (templatesStatusDoc) => {
+            console.log('[useServices] onSnapshot do templatesStatusRef disparado!', templatesStatusDoc.exists());
+            if (!isMounted) {
+              console.log('[useServices] Componente desmontado, ignorando atualização do templatesStatus');
+              return;
+            }
+            
+            const templatesStatus = templatesStatusDoc.exists() 
+              ? (templatesStatusDoc.data().templates || {}) as Record<string, boolean>
+              : {};
+            console.log('[useServices] Novo status dos templates:', templatesStatus);
+            
+            // Recarregar serviços quando o status dos templates mudar
+            const q = query(
+              collection(db, collectionPath),
+              orderBy('nome', 'asc')
+            );
+            const snapshot = await getDocs(q);
+            const companyServices = snapshot.docs.map(doc => {
+              const data = doc.data();
+              return {
+                id: doc.id,
+                nome: data.nome || '',
+                duracaoMin: data.duracaoMin || 60,
+                precoCentavos: data.precoCentavos || 0,
+                comissaoPercent: data.comissaoPercent || 0,
+                ativo: data.ativo !== undefined ? data.ativo : true,
+                companyId: companyId,
+                isTemplate: false
+              } as Service;
+            });
+            
+            console.log('[useServices] Recarregando serviços após mudança no templatesStatus');
+            await loadServices(companyData, companyServices);
+          }, (err) => {
+            console.error('[useServices] Erro no listener do templatesStatusRef:', err);
+          });
+          
+          // Listener para campos editados dos templates
+          templatesEditedUnsubscribe = onSnapshot(templatesEditedRef, async (templatesEditedDoc) => {
+            console.log('[useServices] onSnapshot do templatesEditedRef disparado!', templatesEditedDoc.exists());
+            if (!isMounted) {
+              console.log('[useServices] Componente desmontado, ignorando atualização do templatesEdited');
+              return;
+            }
+            
+            const templatesEdited = templatesEditedDoc.exists() 
+              ? (templatesEditedDoc.data().templates || {}) as Record<string, {
+                  duracaoMin?: number;
+                  precoCentavos?: number;
+                  comissaoPercent?: number;
+                }>
+              : {};
+            console.log('[useServices] Novos campos editados dos templates:', templatesEdited);
+            
+            // Recarregar serviços quando os campos editados mudarem
+            const q = query(
+              collection(db, collectionPath),
+              orderBy('nome', 'asc')
+            );
+            const snapshot = await getDocs(q);
+            const companyServices = snapshot.docs.map(doc => {
+              const data = doc.data();
+              return {
+                id: doc.id,
+                nome: data.nome || '',
+                duracaoMin: data.duracaoMin || 60,
+                precoCentavos: data.precoCentavos || 0,
+                comissaoPercent: data.comissaoPercent || 0,
+                ativo: data.ativo !== undefined ? data.ativo : true,
+                companyId: companyId,
+                isTemplate: false
+              } as Service;
+            });
+            
+            console.log('[useServices] Recarregando serviços após mudança no templatesEdited');
+            await loadServices(companyData, companyServices);
+          }, (err) => {
+            console.error('[useServices] Erro no listener do templatesEditedRef:', err);
+          });
+        }
       },
       (err) => {
-        setError(err.message);
-        setLoading(false);
+        if (isMounted) {
+          setError(err.message);
+          setLoading(false);
+        }
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      isMounted = false;
+      companyUnsubscribe();
+      if (servicesUnsubscribe) {
+        servicesUnsubscribe();
+      }
+      if (templatesStatusUnsubscribe) {
+        templatesStatusUnsubscribe();
+      }
+      if (templatesEditedUnsubscribe) {
+        templatesEditedUnsubscribe();
+      }
+    };
   }, [companyId]);
 
   const createService = async (data: Omit<Service, 'id'>) => {
@@ -231,6 +499,7 @@ export function useServices(companyId: string | null | undefined) {
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now()
       });
+      
       // Invalidar cache
       firestoreCache.invalidateCollection(`companies/${companyId}/services`);
     } catch (err: any) {
@@ -242,6 +511,76 @@ export function useServices(companyId: string | null | undefined) {
 
   const updateService = async (id: string, data: Partial<Service>) => {
     if (!companyId) throw new Error('companyId é obrigatório');
+    
+    // Verificar se é um template - salvar apenas campos editados
+    if (id.startsWith('template_')) {
+      const templateId = id.replace('template_', '');
+      console.log('[updateService] Editando template:', templateId, 'Campos:', data);
+      
+      try {
+        const templatesEditedRef = doc(db, `companies/${companyId}/settings`, 'dental_templates_edited');
+        const templatesEditedDoc = await getDoc(templatesEditedRef);
+        
+        const currentEdited = templatesEditedDoc.exists() 
+          ? (templatesEditedDoc.data().templates || {}) as Record<string, {
+              duracaoMin?: number;
+              precoCentavos?: number;
+              comissaoPercent?: number;
+            }>
+          : {};
+        
+        // Salvar apenas os campos que foram editados (não undefined)
+        const editedFields: {
+          duracaoMin?: number;
+          precoCentavos?: number;
+          comissaoPercent?: number;
+        } = {};
+        
+        if (data.duracaoMin !== undefined) {
+          editedFields.duracaoMin = data.duracaoMin;
+        }
+        if (data.precoCentavos !== undefined) {
+          editedFields.precoCentavos = data.precoCentavos;
+        }
+        if (data.comissaoPercent !== undefined) {
+          editedFields.comissaoPercent = data.comissaoPercent;
+        }
+        
+        // Mesclar com campos já editados anteriormente
+        const updatedEdited = {
+          ...currentEdited,
+          [templateId]: {
+            ...currentEdited[templateId],
+            ...editedFields
+          }
+        };
+        
+        console.log('[updateService] Campos editados atualizados:', updatedEdited);
+        
+        if (templatesEditedDoc.exists()) {
+          await updateDoc(templatesEditedRef, {
+            templates: updatedEdited,
+            updatedAt: Timestamp.now()
+          });
+        } else {
+          await setDoc(templatesEditedRef, {
+            templates: updatedEdited,
+            createdAt: Timestamp.now(),
+            updatedAt: Timestamp.now()
+          });
+        }
+        
+        // Invalidar cache para forçar recarregamento
+        firestoreCache.invalidateCollection(`companies/${companyId}/services`);
+        console.log('[updateService] Template editado salvo com sucesso');
+      } catch (err: any) {
+        console.error('[updateService] Erro ao salvar campos editados do template:', err);
+        throw new Error('Erro ao atualizar procedimento padrão');
+      }
+      return;
+    }
+    
+    // Serviço normal da empresa
     try {
       await updateDoc(doc(db, `companies/${companyId}/services`, id), {
         ...data,
@@ -255,15 +594,104 @@ export function useServices(companyId: string | null | undefined) {
     }
   };
 
-  const deleteService = async (id: string) => {
-    if (!companyId) throw new Error('companyId é obrigatório');
+  const toggleServiceActive = async (id: string) => {
+    console.log('[toggleServiceActive] Iniciando...', { id, companyId });
+    
+    if (!companyId) {
+      console.error('[toggleServiceActive] companyId não definido');
+      throw new Error('companyId é obrigatório');
+    }
+    
     try {
-      await deleteDoc(doc(db, `companies/${companyId}/services`, id));
-      // Invalidar cache
-      firestoreCache.invalidateCollection(`companies/${companyId}/services`);
-      firestoreCache.invalidateDoc(`companies/${companyId}/services`, id);
-    } catch (err) {
-      throw new Error('Erro ao deletar serviço');
+      // Verificar se é um template (começa com "template_")
+      if (id.startsWith('template_')) {
+        console.log('[toggleServiceActive] É um template');
+        // É um template, gerenciar estado ativo/inativo na empresa
+        const templateId = id.replace('template_', '');
+        console.log('[toggleServiceActive] Template ID:', templateId);
+        
+        const templatesStatusRef = doc(db, `companies/${companyId}/settings`, 'dental_templates_status');
+        const templatesStatusDoc = await getDoc(templatesStatusRef);
+        
+        console.log('[toggleServiceActive] Documento de status existe?', templatesStatusDoc.exists());
+        
+        const currentStatus = templatesStatusDoc.exists() 
+          ? (templatesStatusDoc.data().templates || {}) as Record<string, boolean>
+          : {};
+        
+        console.log('[toggleServiceActive] Status atual:', currentStatus);
+        
+        // Alternar estado (se não existir no status, assume true e muda para false)
+        const currentTemplateStatus = currentStatus[templateId];
+        const newStatus = currentTemplateStatus === undefined ? false : !currentTemplateStatus;
+        
+        console.log('[toggleServiceActive] Status atual do template:', currentTemplateStatus, '-> Novo status:', newStatus);
+        
+        try {
+          await updateDoc(templatesStatusRef, {
+            templates: { ...currentStatus, [templateId]: newStatus },
+            updatedAt: Timestamp.now()
+          });
+          console.log('[toggleServiceActive] Template atualizado com sucesso via updateDoc');
+        } catch (updateError: any) {
+          console.log('[toggleServiceActive] Erro ao atualizar, tentando criar documento:', updateError.message);
+          // Se o documento não existir, criar
+          await setDoc(templatesStatusRef, {
+            templates: { [templateId]: newStatus },
+            createdAt: Timestamp.now(),
+            updatedAt: Timestamp.now()
+          });
+          console.log('[toggleServiceActive] Documento criado com sucesso via setDoc');
+        }
+        
+        // Invalidar cache para forçar atualização
+        firestoreCache.invalidateCollection(`companies/${companyId}/services`);
+        console.log('[toggleServiceActive] Cache invalidado');
+      } else {
+        console.log('[toggleServiceActive] É um serviço normal da empresa');
+        // É um serviço normal da empresa, alternar campo ativo
+        const serviceRef = doc(db, `companies/${companyId}/services`, id);
+        console.log('[toggleServiceActive] Referência do serviço:', serviceRef.path);
+        
+        const serviceDoc = await getDoc(serviceRef);
+        console.log('[toggleServiceActive] Serviço existe?', serviceDoc.exists());
+        
+        if (!serviceDoc.exists()) {
+          console.error('[toggleServiceActive] Serviço não encontrado no Firestore');
+          throw new Error('Serviço não encontrado');
+        }
+        
+        const serviceData = serviceDoc.data();
+        console.log('[toggleServiceActive] Dados atuais do serviço:', serviceData);
+        
+        const currentAtivo = serviceData.ativo !== undefined ? serviceData.ativo : true;
+        const newAtivo = !currentAtivo;
+        
+        console.log('[toggleServiceActive] Status atual:', currentAtivo, '-> Novo status:', newAtivo);
+        
+        await updateDoc(serviceRef, {
+          ativo: newAtivo,
+          updatedAt: Timestamp.now()
+        });
+        
+        console.log('[toggleServiceActive] Serviço atualizado no Firestore com sucesso');
+        
+        // Verificar se foi realmente atualizado
+        const verifyDoc = await getDoc(serviceRef);
+        const verifyData = verifyDoc.data();
+        console.log('[toggleServiceActive] Verificação pós-atualização:', verifyData);
+        
+        // Invalidar cache
+        firestoreCache.invalidateCollection(`companies/${companyId}/services`);
+        firestoreCache.invalidateDoc(`companies/${companyId}/services`, id);
+        console.log('[toggleServiceActive] Cache invalidado');
+      }
+      
+      console.log('[toggleServiceActive] Concluído com sucesso');
+    } catch (err: any) {
+      console.error('[toggleServiceActive] Erro capturado:', err);
+      console.error('[toggleServiceActive] Stack:', err.stack);
+      throw new Error(`Erro ao alterar status do serviço: ${err.message || 'Erro desconhecido'}`);
     }
   };
 
@@ -273,7 +701,7 @@ export function useServices(companyId: string | null | undefined) {
     error,
     createService,
     updateService,
-    deleteService
+    toggleServiceActive
   };
 }
 
@@ -872,11 +1300,14 @@ export function useAppointments(
     if (!data.professionalId || data.professionalId.trim() === '') {
       throw new Error('professionalId é obrigatório');
     }
-    if (!data.clientId || data.clientId.trim() === '') {
-      throw new Error('clientId é obrigatório');
-    }
-    if (!data.serviceId || data.serviceId.trim() === '') {
-      throw new Error('serviceId é obrigatório');
+    // clientId e serviceId são obrigatórios apenas para agendamentos (não bloqueios)
+    if (!data.isBlock) {
+      if (!data.clientId || data.clientId.trim() === '') {
+        throw new Error('clientId é obrigatório');
+      }
+      if (!data.serviceId || data.serviceId.trim() === '') {
+        throw new Error('serviceId é obrigatório');
+      }
     }
     if (!data.inicio || !data.fim) {
       throw new Error('inicio e fim são obrigatórios');
@@ -938,8 +1369,9 @@ export function useAppointments(
       const payload: any = {
         ...data,
         professionalId: data.professionalId,
-        clientId: data.clientId,
-        serviceId: data.serviceId,
+        // Para bloqueios, clientId e serviceId devem ser vazios
+        clientId: data.isBlock ? '' : (data.clientId || ''),
+        serviceId: data.isBlock ? '' : (data.serviceId || ''),
         precoCentavos: data.precoCentavos ?? 0,
         comissaoPercent: data.comissaoPercent ?? 0,
         status: data.status ?? (data.isBlock ? 'bloqueio' : 'agendado'),

@@ -84,7 +84,9 @@ export function AdvancedFilters({
     pro.apelido.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const filteredServices = services.filter(service =>
+  // Filtrar apenas serviços ativos
+  const activeServices = services.filter(s => s.ativo);
+  const filteredServices = activeServices.filter(service =>
     service.nome.toLowerCase().includes(searchTerm.toLowerCase())
   );
 

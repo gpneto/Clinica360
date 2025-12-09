@@ -1657,7 +1657,13 @@ export default function SettingsPage() {
         ...(capimEmail ? { capimEmail } : {}),
         ...(capimPassword ? { capimPassword } : {})
       };
-      await setDoc(doc(db, `companies/${companyId}/settings`, 'general'), settingsToSave, { merge: true });
+      
+      // Remover campos undefined antes de salvar (Firestore não aceita undefined)
+      const cleanedSettings = Object.fromEntries(
+        Object.entries(settingsToSave).filter(([_, value]) => value !== undefined)
+      );
+      
+      await setDoc(doc(db, `companies/${companyId}/settings`, 'general'), cleanedSettings, { merge: true });
       
       // Atualizar documento da empresa com tipo de estabelecimento e logo
       const companyUpdates: any = {

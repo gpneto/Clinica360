@@ -124,6 +124,8 @@ export interface Service {
   precoCentavos: number;
   comissaoPercent: number;
   ativo: boolean;
+  isTemplate?: boolean; // Indica se é um template dental (não pode ser deletado diretamente)
+  templateId?: string; // ID do template original (se for template)
 }
 
 export interface Patient {

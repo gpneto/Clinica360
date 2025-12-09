@@ -439,7 +439,9 @@ export function OrcamentoModal({
   const procedimentosARealizar = procedimentos.filter(p => p.estado === 'a_realizar');
   
   // Filtrar serviços baseado na busca
-  const filteredServices = services.filter(service =>
+  // Filtrar apenas serviços ativos
+  const activeServices = services.filter(s => s.ativo);
+  const filteredServices = activeServices.filter(service =>
     service.nome.toLowerCase().includes(procedimentoQuery.toLowerCase())
   );
   

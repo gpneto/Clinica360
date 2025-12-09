@@ -1733,7 +1733,9 @@ export function DentalChart({
   }, []);
 
   // Filtrar serviços baseado na busca
-  const filteredServices = services.filter(service =>
+  // Filtrar apenas serviços ativos
+  const activeServices = services.filter(s => s.ativo);
+  const filteredServices = activeServices.filter(service =>
     service.nome.toLowerCase().includes(serviceQuery.toLowerCase())
   );
 

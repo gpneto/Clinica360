@@ -10,7 +10,7 @@ import { LoadingSpinner } from '@/components/ui/loading';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useServices, useCompanySettings, useCompany } from '@/hooks/useFirestore';
 import { Service } from '@/types';
-import { Plus, Package, Edit, Trash2, Clock, DollarSign, Percent, UserCheck, BarChart3, Gift, Tablet, Wand2, Upload, Check, X, Search, FileUp, Table } from 'lucide-react';
+import { Plus, Package, Edit, Trash2, Clock, DollarSign, Percent, UserCheck, BarChart3, Gift, Tablet, Wand2, Upload, Check, X, Search, FileUp, Table, Power, PowerOff } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { addDoc, collection, Timestamp, updateDoc, deleteDoc, doc, getDocs, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -27,7 +27,7 @@ interface ProcedimentoOdontologico {
 
 export default function ServicesPage() {
   const { companyId, themePreference, customColor, customColor2 } = useAuth();
-  const { services, loading, error, createService, updateService, deleteService } = useServices(companyId);
+  const { services, loading, error, createService, updateService, toggleServiceActive } = useServices(companyId);
   const { settings: companySettings, loading: companySettingsLoading } = useCompanySettings(companyId);
   const { company, loading: companyLoading } = useCompany(companyId);
   const showCommission = companySettings?.showCommission ?? true;
@@ -77,9 +77,23 @@ export default function ServicesPage() {
         comissaoPercent: showCommission ? formData.comissaoPercent : 0,
       };
 
-      if (editingService) {
+      // Se for template, salvar apenas os campos editados (não criar serviço completo)
+      if (editingService?.isTemplate) {
+        const templateId = editingService.templateId;
+        console.log('[handleSubmit] Editando template:', { templateId, payload });
+        if (!templateId) {
+          console.error('[handleSubmit] templateId não encontrado!', editingService);
+          alert('Erro: templateId não encontrado.');
+          return;
+        }
+        // Atualizar apenas os campos editados do template
+        await updateService(editingService.id, payload);
+        alert('Campos editados salvos com sucesso! O procedimento padrão foi atualizado.');
+      } else if (editingService) {
+        // Serviço normal da empresa, atualizar
         await updateService(editingService.id, payload);
       } else {
+        // Novo serviço
         await createService({
           ...payload,
           companyId
@@ -100,24 +114,51 @@ export default function ServicesPage() {
   };
 
   const handleEdit = (service: Service) => {
+    // Se for template, abrir modal para criar cópia na empresa
+    // Se for serviço normal, editar normalmente
     setEditingService(service);
     setFormData({
       nome: service.nome,
-      duracaoMin: service.duracaoMin,
-      precoCentavos: service.precoCentavos,
-      comissaoPercent: service.comissaoPercent,
+      duracaoMin: service.duracaoMin, // Usa a duração do template ou do serviço
+      precoCentavos: service.isTemplate ? 0 : service.precoCentavos, // Templates começam com 0
+      comissaoPercent: service.isTemplate ? 0 : service.comissaoPercent, // Templates começam com 0
       ativo: service.ativo
     });
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Tem certeza que deseja deletar este serviço?')) {
+  const handleToggleActive = async (id: string) => {
+    console.log('[handleToggleActive] Iniciando...', { id, servicesCount: services.length });
+    
+    const service = services.find(s => s.id === id);
+    console.log('[handleToggleActive] Serviço encontrado:', service);
+    
+    if (!service) {
+      console.error('[handleToggleActive] Serviço não encontrado na lista');
+      alert('Serviço não encontrado.');
+      return;
+    }
+    
+    const isActive = service.ativo ?? true;
+    const action = isActive ? 'desativar' : 'ativar';
+    const message = `Tem certeza que deseja ${action} este ${service.isTemplate ? 'procedimento padrão' : 'serviço'}?`;
+    
+    console.log('[handleToggleActive] Status atual:', isActive, 'Ação:', action);
+    
+    if (confirm(message)) {
+      console.log('[handleToggleActive] Usuário confirmou, chamando toggleServiceActive...');
       try {
-        await deleteService(id);
-      } catch (error) {
-        console.error('Erro ao deletar serviço:', error);
+        await toggleServiceActive(id);
+        console.log('[handleToggleActive] toggleServiceActive concluído com sucesso');
+        // O onSnapshot deve atualizar automaticamente
+        console.log('[handleToggleActive] Aguardando atualização do onSnapshot...');
+      } catch (error: any) {
+        console.error('[handleToggleActive] Erro capturado:', error);
+        console.error('[handleToggleActive] Stack:', error?.stack);
+        alert(`Erro ao processar a ação: ${error?.message || 'Erro desconhecido'}. Tente novamente.`);
       }
+    } else {
+      console.log('[handleToggleActive] Usuário cancelou');
     }
   };
 
@@ -218,14 +259,14 @@ export default function ServicesPage() {
       for (const proc of selectedProcedimentos) {
         await createService({
           nome: proc.nome,
-          duracaoMin: proc.duracaoMin,
-          precoCentavos: proc.precoCentavos,
-          comissaoPercent: 0, // Comissão sempre 0 para procedimentos importados do template
+          duracaoMin: proc.duracaoMin || 0, // Usa a duração do template ou 0
+          precoCentavos: 0, // Zerado - usuário deve definir
+          comissaoPercent: 0, // Zerado - usuário deve definir
           ativo: true,
           companyId,
         });
       }
-      alert(`${selectedProcedimentos.length} procedimento(s) importado(s) com sucesso!`);
+      alert(`${selectedProcedimentos.length} procedimento(s) importado(s) com sucesso! Os valores de preço e comissão foram zerados.`);
       setIsImportModalOpen(false);
       setProcedimentos([]);
       setSearchQuery('');
@@ -290,14 +331,21 @@ export default function ServicesPage() {
     }
   };
 
-  // Filtrar serviços pelo termo de busca
+  // Filtrar serviços pelo termo de busca (mantém todos, ativos e inativos)
   const filteredServices = useMemo(() => {
+    console.log('[ServicesPage] Total de serviços recebidos:', services.length);
+    console.log('[ServicesPage] Serviços ativos:', services.filter(s => s.ativo).length);
+    console.log('[ServicesPage] Serviços inativos:', services.filter(s => !s.ativo).length);
+    
     if (!searchTerm.trim()) {
+      console.log('[ServicesPage] Sem busca, retornando todos os serviços:', services.length);
       return services;
     }
-    return services.filter(service =>
+    const filtered = services.filter(service =>
       service.nome.toLowerCase().includes(searchTerm.toLowerCase())
     );
+    console.log('[ServicesPage] Após busca, serviços encontrados:', filtered.length);
+    return filtered;
   }, [services, searchTerm]);
 
   if (loading || companySettingsLoading || companyLoading) {
@@ -410,28 +458,6 @@ export default function ServicesPage() {
                   {templateImportLoading ? 'Importando...' : 'Importar Template (TEMP)'}
                 </Button>
                 */}
-                {isDentista && (
-                  <Button
-                    onClick={loadProcedimentosFromTemplate}
-                    disabled={importLoading}
-                    className={cn(
-                      'text-white shadow-lg',
-                      hasGradient
-                        ? isCustom && gradientStyleHorizontal
-                          ? 'hover:opacity-90'
-                          : isVibrant
-                          ? 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700'
-                          : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700'
-                        : isNeutral
-                        ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700'
-                        : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700'
-                    )}
-                    style={isCustom && gradientStyleHorizontal ? gradientStyleHorizontal : undefined}
-                  >
-                    <Upload className="w-4 h-4 mr-2" />
-                    {importLoading ? 'Carregando...' : 'Importar Procedimentos'}
-                  </Button>
-                )}
                 <Button
                   onClick={() => {
                     setEditingService(null);
@@ -891,10 +917,16 @@ export default function ServicesPage() {
                           )}
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center gap-2">
+                              {service.isTemplate && (
+                                <Badge className="bg-blue-100 text-blue-700 border-blue-300">
+                                  Padrão
+                                </Badge>
+                              )}
                               <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => handleEdit(service)}
+                                title={service.isTemplate ? 'Criar cópia personalizada na sua empresa' : 'Editar serviço'}
                                 className={cn(
                                   hasGradient
                                     ? 'border-white/30 text-slate-700 hover:bg-white/40'
@@ -908,16 +940,27 @@ export default function ServicesPage() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleDelete(service.id)}
+                                onClick={() => handleToggleActive(service.id)}
                                 className={cn(
-                                  hasGradient
-                                    ? 'border-white/30 text-rose-600 hover:bg-white/40'
+                                  service.ativo
+                                    ? hasGradient
+                                      ? 'border-white/30 text-orange-600 hover:bg-white/40'
+                                      : isNeutral
+                                      ? 'border-slate-300 text-orange-600 hover:bg-slate-100 hover:border-slate-400'
+                                      : 'hover:bg-orange-50 text-orange-600 border-orange-200 hover:border-orange-400'
+                                    : hasGradient
+                                    ? 'border-white/30 text-green-600 hover:bg-white/40'
                                     : isNeutral
-                                    ? 'border-slate-300 text-slate-600 hover:bg-slate-100 hover:border-slate-400'
-                                    : 'hover:bg-red-50 text-red-600 border-red-200 hover:border-red-400'
+                                    ? 'border-slate-300 text-green-600 hover:bg-slate-100 hover:border-slate-400'
+                                    : 'hover:bg-green-50 text-green-600 border-green-200 hover:border-green-400'
                                 )}
+                                title={service.ativo ? 'Desativar serviço' : 'Ativar serviço'}
                               >
-                                <Trash2 className="w-4 h-4" />
+                                {service.ativo ? (
+                                  <PowerOff className="w-4 h-4" />
+                                ) : (
+                                  <Power className="w-4 h-4" />
+                                )}
                               </Button>
                             </div>
                           </td>
@@ -1045,9 +1088,16 @@ export default function ServicesPage() {
                         <Package className="w-7 h-7" />
                       </div>
                       <div>
-                        <h3 className="font-bold text-gray-900 text-lg">
-                          {service.nome}
-                        </h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-bold text-gray-900 text-lg">
+                            {service.nome}
+                          </h3>
+                          {service.isTemplate && (
+                            <Badge className="bg-blue-100 text-blue-700 border-blue-300 text-xs">
+                              Padrão
+                            </Badge>
+                          )}
+                        </div>
                         <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold mt-1 ${
                           service.ativo 
                             ? "bg-gradient-to-r from-green-500 to-green-600 text-white" 
@@ -1063,6 +1113,7 @@ export default function ServicesPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => handleEdit(service)}
+                        title={service.isTemplate ? 'Criar cópia personalizada na sua empresa' : 'Editar serviço'}
                         className={cn(
                           hasGradient
                             ? 'border-white/30 text-slate-700 hover:bg-white/40'
@@ -1076,16 +1127,27 @@ export default function ServicesPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleDelete(service.id)}
+                        onClick={() => handleToggleActive(service.id)}
                         className={cn(
-                          hasGradient
-                            ? 'border-white/30 text-rose-600 hover:bg-white/40'
+                          service.ativo
+                            ? hasGradient
+                              ? 'border-white/30 text-orange-600 hover:bg-white/40'
+                              : isNeutral
+                              ? 'border-slate-300 text-orange-600 hover:bg-slate-100 hover:border-slate-400'
+                              : 'hover:bg-orange-50 text-orange-600 border-orange-200 hover:border-orange-400'
+                            : hasGradient
+                            ? 'border-white/30 text-green-600 hover:bg-white/40'
                             : isNeutral
-                            ? 'border-slate-300 text-slate-600 hover:bg-slate-100 hover:border-slate-400'
-                            : 'hover:bg-red-50 text-red-600 border-red-200 hover:border-red-400'
+                            ? 'border-slate-300 text-green-600 hover:bg-slate-100 hover:border-slate-400'
+                            : 'hover:bg-green-50 text-green-600 border-green-200 hover:border-green-400'
                         )}
+                        title={service.ativo ? 'Desativar serviço' : 'Ativar serviço'}
                       >
-                        <Trash2 className="w-4 h-4" />
+                        {service.ativo ? (
+                          <PowerOff className="w-4 h-4" />
+                        ) : (
+                          <Power className="w-4 h-4" />
+                        )}
                       </Button>
                     </div>
                   </div>
