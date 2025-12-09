@@ -26,6 +26,25 @@ export function AnamneseTab({
   singularTitle,
 }: AnamneseTabProps) {
   const anamnese = useAnamnese(companyId, patientId, company, patient);
+
+  // Handler para quando o dentista é selecionado - preenche automaticamente CRO e Estado
+  const handleDentistaChange = (dentistaId: string) => {
+    anamnese.setSelectedDentistaId(dentistaId);
+    
+    // Buscar o profissional selecionado
+    const profissional = professionals.find((p) => p.id === dentistaId);
+    
+    // Preencher automaticamente CRO e Estado se o profissional tiver esses dados
+    if (profissional) {
+      if (profissional.cro) {
+        anamnese.setNumeroCRO(profissional.cro);
+      }
+      if (profissional.croEstado) {
+        anamnese.setEstadoCRO(profissional.croEstado);
+      }
+    }
+  };
+
   return (
     <div className="space-y-4">
       <Card className="bg-white shadow-lg border-0">
@@ -219,7 +238,7 @@ export function AnamneseTab({
         onCloseSend={() => anamnese.setSendAnamneseModal(null)}
         onCloseAlertas={() => anamnese.setShowAlertasModal(false)}
         onModeloChange={anamnese.setSelectedModeloId}
-        onDentistaChange={anamnese.setSelectedDentistaId}
+        onDentistaChange={handleDentistaChange}
         onNumeroCROChange={anamnese.setNumeroCRO}
         onEstadoCROChange={anamnese.setEstadoCRO}
         onEnviarParaPacienteChange={anamnese.setEnviarParaPaciente}

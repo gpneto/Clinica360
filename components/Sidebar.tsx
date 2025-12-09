@@ -36,8 +36,6 @@ import { cn, getGradientColors, getGradientStyle } from '@/lib/utils';
 import { useCustomerLabels } from '@/hooks/useCustomerLabels';
 import {
   canAccessProfessionalsMenu,
-  canAccessClientsMenu,
-  canAccessServicesMenu,
   canViewAllAgendas,
   hasFullFinancialAccess,
 } from '@/lib/permissions';
@@ -78,8 +76,7 @@ const navigation: NavigationItem[] = [
     name: 'Pacientes', 
     href: '/pacientes', 
     icon: HeartPulse, 
-    roles: ['owner', 'admin', 'atendente', 'outro'],
-    checkPermission: (user) => canAccessClientsMenu(user)
+    roles: ['owner', 'admin', 'pro', 'atendente', 'outro']
   },
   { 
     name: 'Mensagens', 
@@ -116,8 +113,7 @@ const navigation: NavigationItem[] = [
         name: 'Serviços', 
         href: '/servicos', 
         icon: Package, 
-        roles: ['owner', 'admin', 'outro'],
-        checkPermission: (user) => canAccessServicesMenu(user)
+        roles: ['owner', 'admin', 'pro', 'atendente', 'outro']
       },
       { name: 'Usuários', href: '/usuarios', icon: Users, roles: ['owner', 'admin'] },
       { name: 'Modelos de anamnese', href: '/configuracoes/modelos-anamnese', icon: FileText, roles: ['owner', 'admin'] },
@@ -395,7 +391,7 @@ export function Sidebar() {
               {company?.logoUrl && !logoError ? (
                 <motion.div
                   className={cn(
-                    'flex h-12 w-12 items-center justify-center rounded-lg overflow-hidden cursor-pointer'
+                    'flex h-12 w-12 items-center justify-center rounded-lg overflow-hidden cursor-pointer bg-muted/20 border-2 border-dashed border-input'
                   )}
                   whileHover={{ scale: 1.05 }}
                   transition={{ duration: 0.2, ease: 'easeOut' }}
@@ -404,7 +400,7 @@ export function Sidebar() {
                   <img
                     src={company.logoUrl}
                     alt={`Logo ${company.nome}`}
-                    className="h-full w-full object-cover transition-transform duration-200"
+                    className="h-full w-full object-contain transition-transform duration-200"
                     onError={() => setLogoError(true)}
                   />
                 </motion.div>

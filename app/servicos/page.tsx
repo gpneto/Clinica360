@@ -3,7 +3,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AccessGuard } from '@/components/AccessGuard';
-import { canAccessServicesMenu } from '@/lib/permissions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -311,8 +310,7 @@ export default function ServicesPage() {
 
   return (
     <AccessGuard 
-      allowed={['owner', 'admin', 'outro']}
-      checkPermission={(user) => canAccessServicesMenu(user)}
+      allowed={['owner', 'admin', 'pro', 'atendente', 'outro']}
     >
       <div className={cn('app-page min-h-screen p-2 sm:p-4 md:p-6 lg:p-8')}>
         <div className="mx-auto max-w-7xl space-y-6">

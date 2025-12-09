@@ -292,6 +292,8 @@ export interface DebitoPaciente {
   profissionalId?: string;
   observacoes?: string;
   dentalProcedureId?: string; // ID do procedimento odontológico vinculado
+  serviceIds?: string[]; // IDs dos serviços selecionados
+  dataVencimento?: Date; // Data de vencimento do débito
   createdAt: Date;
   updatedAt: Date;
   createdByUid?: string;

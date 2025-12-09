@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, FileText, Save, Printer, Plus, Trash2, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Search, Check } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { X, FileText, Save, Printer, Plus, Trash2, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Search, Check, Package, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -231,6 +232,7 @@ export function OrcamentoModal({
   orcamento = null,
   onSave,
 }: OrcamentoModalProps) {
+  const router = useRouter();
   const { company } = useCompany(companyId);
   const { patient } = usePatient(companyId, patientId);
   const { createOrcamento, updateOrcamento } = useOrcamentos(companyId, patientId);
@@ -2214,9 +2216,63 @@ export function OrcamentoModal({
               </div>
 
               <div className="flex-1 overflow-y-auto p-2">
-                {filteredServices.length === 0 ? (
+                {services.length === 0 ? (
+                  <div className="text-center py-12 px-4">
+                    <div className={cn(
+                      'mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full',
+                      hasGradient
+                        ? isCustom && gradientColors
+                          ? ''
+                          : isVibrant
+                          ? 'bg-indigo-100 text-indigo-600'
+                          : 'bg-blue-100 text-blue-600'
+                        : 'bg-blue-100 text-blue-600'
+                    )}
+                    style={hasGradient && isCustom && gradientColors ? {
+                      background: `linear-gradient(135deg, ${gradientColors.start}20 0%, ${gradientColors.middle}20 50%, ${gradientColors.end}20 100%)`,
+                      color: gradientColors.start,
+                    } : undefined}
+                    >
+                      <Package className="w-8 h-8" />
+                    </div>
+                    <h3 className={cn(
+                      'text-lg font-semibold mb-2',
+                      hasGradient ? 'text-slate-900' : 'text-gray-900'
+                    )}>
+                      Nenhum serviço cadastrado
+                    </h3>
+                    <p className={cn(
+                      'text-sm mb-6',
+                      hasGradient ? 'text-slate-600' : 'text-gray-600'
+                    )}>
+                      Você precisa cadastrar serviços antes de criar orçamentos.
+                    </p>
+                    <Button
+                      onClick={() => {
+                        setShowProcedimentoModal(false);
+                        router.push('/servicos');
+                      }}
+                      className={cn(
+                        'w-full',
+                        hasGradient
+                          ? isCustom && gradientColors
+                            ? ''
+                            : isVibrant
+                            ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                            : 'bg-blue-600 hover:bg-blue-700 text-white'
+                          : 'bg-blue-600 hover:bg-blue-700 text-white'
+                      )}
+                      style={hasGradient && isCustom && gradientColors ? {
+                        background: `linear-gradient(90deg, ${gradientColors.start} 0%, ${gradientColors.middle} 50%, ${gradientColors.end} 100%)`,
+                      } : undefined}
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Cadastrar Serviços
+                    </Button>
+                  </div>
+                ) : filteredServices.length === 0 ? (
                   <div className="text-center py-12">
-                    <p className="text-gray-500">Nenhum procedimento encontrado</p>
+                    <p className="text-gray-500">Nenhum procedimento encontrado para "{procedimentoQuery}"</p>
                   </div>
                 ) : (
                   <div className="space-y-1">

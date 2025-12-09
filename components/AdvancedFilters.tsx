@@ -243,34 +243,51 @@ export function AdvancedFilters({
                     Serviços
                   </label>
                   <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {filteredServices.map(service => {
-                      const isSelected = selectedServices.includes(service.id);
-                      return (
-                        <button
-                          key={service.id}
-                          type="button"
-                          onClick={() => toggleSelection(service.id, selectedServices, onServicesChange)}
-                          className={cn(
-                            'flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition-colors',
-                            isSelected
-                              ? 'border-indigo-400 bg-indigo-500/10 text-slate-900'
-                              : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100/80'
-                          )}
-                        >
-                          <span className="text-sm font-medium">
-                            {service.nome} - R$ {(service.precoCentavos / 100).toFixed(2)}
-                          </span>
-                          <div
+                    {services.length === 0 ? (
+                      <div className="text-center py-8 px-4">
+                        <p className="text-sm text-slate-500 mb-3">
+                          Nenhum serviço cadastrado
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          Cadastre serviços em Configurações → Serviços
+                        </p>
+                      </div>
+                    ) : filteredServices.length === 0 ? (
+                      <div className="text-center py-4">
+                        <p className="text-xs text-slate-400">
+                          Nenhum serviço encontrado para "{searchTerm}"
+                        </p>
+                      </div>
+                    ) : (
+                      filteredServices.map(service => {
+                        const isSelected = selectedServices.includes(service.id);
+                        return (
+                          <button
+                            key={service.id}
+                            type="button"
+                            onClick={() => toggleSelection(service.id, selectedServices, onServicesChange)}
                             className={cn(
-                              'flex h-5 w-5 items-center justify-center rounded-full border text-xs font-bold transition-colors',
-                              isSelected ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-slate-300 text-transparent'
+                              'flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left transition-colors',
+                              isSelected
+                                ? 'border-indigo-400 bg-indigo-500/10 text-slate-900'
+                                : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100/80'
                             )}
                           >
-                            ✓
-                          </div>
-                        </button>
-                      );
-                    })}
+                            <span className="text-sm font-medium">
+                              {service.nome} - R$ {(service.precoCentavos / 100).toFixed(2)}
+                            </span>
+                            <div
+                              className={cn(
+                                'flex h-5 w-5 items-center justify-center rounded-full border text-xs font-bold transition-colors',
+                                isSelected ? 'border-indigo-500 bg-indigo-500 text-white' : 'border-slate-300 text-transparent'
+                              )}
+                            >
+                              ✓
+                            </div>
+                          </button>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
 

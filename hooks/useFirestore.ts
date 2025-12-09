@@ -2117,6 +2117,12 @@ export function usePatientDebits(
             ? new Date(data.updatedAt)
             : createdAt;
 
+          const dataVencimento = data.dataVencimento?.toDate
+            ? data.dataVencimento.toDate()
+            : data.dataVencimento
+            ? new Date(data.dataVencimento)
+            : undefined;
+
           const debito: DebitoPaciente = {
             id: docSnap.id,
             companyId: companyId || '',
@@ -2130,6 +2136,8 @@ export function usePatientDebits(
             profissionalId: data.profissionalId,
             observacoes: data.observacoes,
             dentalProcedureId: data.dentalProcedureId,
+            serviceIds: data.serviceIds || undefined,
+            dataVencimento,
             createdAt,
             updatedAt,
             createdByUid: data.createdByUid,
@@ -2189,6 +2197,12 @@ export function usePatientDebits(
     if (data.createdByUid) {
       payload.createdByUid = data.createdByUid;
     }
+    if ((data as any).serviceIds && Array.isArray((data as any).serviceIds)) {
+      payload.serviceIds = (data as any).serviceIds;
+    }
+    if ((data as any).dataVencimento) {
+      payload.dataVencimento = Timestamp.fromDate((data as any).dataVencimento);
+    }
 
     const docRef = await addDoc(
       collection(db, `companies/${companyId}/patients/${patientId}/debitos`),
@@ -2243,12 +2257,127 @@ export function usePatientDebits(
     );
   };
 
+  const updateDebito = async (
+    debitoId: string,
+    data: Partial<Omit<DebitoPaciente, 'id' | 'companyId' | 'patientId' | 'createdAt' | 'updatedAt' | 'lancamentos' | 'saldoRecebidoCentavos' | 'saldoReceberCentavos' | 'status'>>
+  ) => {
+    if (!companyId || !patientId) throw new Error('companyId e patientId são obrigatórios');
+
+    const debitoDoc = await getDoc(
+      doc(db, `companies/${companyId}/patients/${patientId}/debitos`, debitoId)
+    );
+
+    if (!debitoDoc.exists()) {
+      throw new Error('Débito não encontrado');
+    }
+
+    const debitoData = debitoDoc.data();
+    const payload: Record<string, unknown> = {
+      updatedAt: Timestamp.now(),
+    };
+
+    if (data.procedimento !== undefined) {
+      payload.procedimento = data.procedimento;
+    }
+    if (data.valorTotalCentavos !== undefined) {
+      // Se o valor total mudou, recalcular saldos
+      const valorTotalAnterior = debitoData.valorTotalCentavos || 0;
+      const saldoRecebidoAtual = debitoData.saldoRecebidoCentavos || 0;
+      const novoValorTotal = data.valorTotalCentavos;
+      
+      payload.valorTotalCentavos = novoValorTotal;
+      
+      // Recalcular saldos baseado no novo valor total
+      const novoSaldoRecebido = Math.min(saldoRecebidoAtual, novoValorTotal);
+      const novoSaldoReceber = Math.max(0, novoValorTotal - novoSaldoRecebido);
+      
+      payload.saldoRecebidoCentavos = novoSaldoRecebido;
+      payload.saldoReceberCentavos = novoSaldoReceber;
+      
+      // Atualizar status baseado nos novos saldos
+      let novoStatus: DebitoPaciente['status'] = 'pendente';
+      if (novoSaldoReceber === 0) {
+        novoStatus = 'concluido';
+      } else if (novoSaldoRecebido > 0) {
+        novoStatus = 'parcial';
+      }
+      payload.status = novoStatus;
+    }
+    if (data.observacoes !== undefined) {
+      payload.observacoes = data.observacoes || null;
+    }
+    if (data.profissionalId !== undefined) {
+      payload.profissionalId = data.profissionalId || null;
+    }
+    if ((data as any).serviceIds !== undefined) {
+      payload.serviceIds = (data as any).serviceIds || null;
+    }
+    if ((data as any).dataVencimento !== undefined) {
+      payload.dataVencimento = (data as any).dataVencimento ? Timestamp.fromDate((data as any).dataVencimento) : null;
+    }
+
+    await updateDoc(
+      doc(db, `companies/${companyId}/patients/${patientId}/debitos`, debitoId),
+      payload
+    );
+  };
+
+  const removeLancamento = async (debitoId: string, lancamentoId: string) => {
+    if (!companyId || !patientId) throw new Error('companyId e patientId são obrigatórios');
+
+    const debitoDoc = await getDoc(
+      doc(db, `companies/${companyId}/patients/${patientId}/debitos`, debitoId)
+    );
+
+    if (!debitoDoc.exists()) {
+      throw new Error('Débito não encontrado');
+    }
+
+    const debitoData = debitoDoc.data();
+    const lancamentosAtuais = debitoData.lancamentos || [];
+    
+    // Encontrar o lançamento a ser removido
+    const lancamentoRemover = lancamentosAtuais.find((l: any) => l.id === lancamentoId);
+    if (!lancamentoRemover) {
+      throw new Error('Lançamento não encontrado');
+    }
+
+    // Remover o lançamento do array
+    const novosLancamentos = lancamentosAtuais.filter((l: any) => l.id !== lancamentoId);
+    
+    // Recalcular saldos
+    const valorRemovido = lancamentoRemover.valorCentavos || 0;
+    const novoSaldoRecebido = Math.max(0, (debitoData.saldoRecebidoCentavos || 0) - valorRemovido);
+    const novoSaldoReceber = (debitoData.valorTotalCentavos || 0) - novoSaldoRecebido;
+
+    // Atualizar status
+    let novoStatus: DebitoPaciente['status'] = 'pendente';
+    if (novoSaldoReceber === 0) {
+      novoStatus = 'concluido';
+    } else if (novoSaldoRecebido > 0) {
+      novoStatus = 'parcial';
+    }
+
+    await updateDoc(
+      doc(db, `companies/${companyId}/patients/${patientId}/debitos`, debitoId),
+      {
+        lancamentos: novosLancamentos,
+        saldoRecebidoCentavos: novoSaldoRecebido,
+        saldoReceberCentavos: novoSaldoReceber,
+        status: novoStatus,
+        updatedAt: Timestamp.now(),
+      }
+    );
+  };
+
   return {
     debitos,
     loading,
     error,
     createDebito,
     addLancamento,
+    updateDebito,
+    removeLancamento,
   };
 }
 

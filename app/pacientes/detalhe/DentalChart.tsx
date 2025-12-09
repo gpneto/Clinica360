@@ -3,8 +3,9 @@
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Plus, X, Trash2, Search, Check, MoreVertical, Edit, FileText, Download, Save, Printer, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Wallet } from 'lucide-react';
+import { Plus, X, Trash2, Search, Check, MoreVertical, Edit, FileText, Download, Save, Printer, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Wallet, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -1628,6 +1629,7 @@ export function DentalChart({
   orcamentos = [],
   onNavigateToOrcamentos,
 }: DentalChartProps) {
+  const router = useRouter();
   const { company } = useCompany(companyId);
   const { patient } = usePatient(companyId, patientId);
   const { createOrcamento } = useOrcamentos(companyId, patientId);
@@ -3915,9 +3917,32 @@ export function DentalChart({
 
               {/* Lista de serviços */}
               <div className="flex-1 overflow-y-auto p-2">
-                {filteredServices.length === 0 ? (
+                {services.length === 0 ? (
+                  <div className="text-center py-12 px-4">
+                    <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                      <Package className="w-8 h-8" />
+                    </div>
+                    <h3 className="text-lg font-semibold mb-2 text-gray-900">
+                      Nenhum serviço cadastrado
+                    </h3>
+                    <p className="text-sm mb-6 text-gray-600">
+                      Você precisa cadastrar serviços antes de adicionar procedimentos.
+                    </p>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        setShowServiceModal(false);
+                        router.push('/servicos');
+                      }}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Cadastrar Serviços
+                    </Button>
+                  </div>
+                ) : filteredServices.length === 0 ? (
                   <div className="text-center py-12">
-                    <p className="text-gray-500">Nenhum serviço encontrado</p>
+                    <p className="text-gray-500">Nenhum serviço encontrado para "{serviceQuery}"</p>
                   </div>
                 ) : (
                   <div className="space-y-1">

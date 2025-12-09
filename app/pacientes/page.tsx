@@ -6,26 +6,63 @@ import { useRouter } from 'next/navigation';
 import { AccessGuard } from '@/components/AccessGuard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { usePatients } from '@/hooks/useFirestore';
+import { usePatients, useCompany } from '@/hooks/useFirestore';
 import { Patient } from '@/types';
 import { Plus, Edit, Trash2, Users, Phone, Mail, MessageCircle, ClipboardList, FolderOpen, X, AlertTriangle, Table } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
-import { canAccessClientsMenu } from '@/lib/permissions';
+import { canAccessPatientDebits } from '@/lib/permissions';
 import { cn, getGradientColors, getGradientStyle } from '@/lib/utils';
 import { useCustomerLabels } from '@/hooks/useCustomerLabels';
 import { startOfDay } from 'date-fns';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select } from '@/components/ui/select';
+import { TAB_ITEMS } from '@/app/pacientes/detalhe/constants';
 
 export default function PatientsPage() {
-  const { companyId, user, themePreference, customColor, customColor2 } = useAuth();
+  const { companyId, user, userData, themePreference, customColor, customColor2 } = useAuth();
   const router = useRouter();
   const { patients, loading, error, createPatient, updatePatient, deletePatient } = usePatients(companyId);
+  const { company } = useCompany(companyId);
   const isVibrant = themePreference === 'vibrant';
   const isNeutral = themePreference === 'neutral';
   const isCustom = themePreference === 'custom';
   const hasGradient = isVibrant || isCustom;
   const gradientColors = isCustom && customColor ? getGradientColors('custom', customColor, customColor2) : null;
   const gradientStyleHorizontal = isCustom && customColor ? getGradientStyle('custom', customColor, '90deg', customColor2) : undefined;
+  const isDentist = company?.tipoEstabelecimento === 'dentista';
+  
+  // Criar objeto user completo para verificação de permissões
+  const userWithPermissions = userData && user ? {
+    uid: user.uid,
+    role: userData.role,
+    permissions: userData.permissions,
+  } : null;
+  
+  // Função para verificar se uma aba está disponível para o usuário
+  const isTabAvailable = (tabId: string) => {
+    const tab = TAB_ITEMS.find(t => t.id === tabId);
+    if (!tab) return false;
+    
+    // Se a tab requer permissão de débitos, verificar se o usuário tem acesso
+    if ('requiresDebitsPermission' in tab && tab.requiresDebitsPermission && (tab.id === 'orcamentos' || tab.id === 'financeiro')) {
+      return canAccessPatientDebits(userWithPermissions as any);
+    }
+    
+    // Se a tab requer dentista, verificar se o tipo de estabelecimento é dentista
+    if ('requiresDentist' in tab && tab.requiresDentist && tab.id === 'ficha_odontologica') {
+      return isDentist;
+    }
+    
+    return true;
+  };
+  
+  // Filtrar abas disponíveis
+  const availableTabs = TAB_ITEMS.filter(tab => isTabAvailable(tab.id));
+  
+  // Handler para quando uma aba é selecionada
+  const handleTabSelect = (patientId: string, tabId: string) => {
+    router.push(`/pacientes/detalhe?patientId=${patientId}&tab=${tabId}`);
+  };
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -306,8 +343,7 @@ export default function PatientsPage() {
   if (!companyId) {
     return (
       <AccessGuard 
-        allowed={['owner', 'admin', 'atendente', 'outro']}
-        checkPermission={(user) => canAccessClientsMenu(user)}
+        allowed={['owner', 'admin', 'pro', 'atendente', 'outro']}
       >
         <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
           <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-6 text-center">
@@ -325,7 +361,7 @@ export default function PatientsPage() {
   }
 
   return (
-     <AccessGuard allowed={['owner', 'admin', 'atendente']}>
+     <AccessGuard allowed={['owner', 'admin', 'pro', 'atendente', 'outro']}>
       <div className={cn('app-page min-h-screen p-2 sm:p-4 md:p-6 lg:p-8')}>
         <div className="mx-auto max-w-7xl space-y-6">
           {/* Header */}
@@ -693,19 +729,7 @@ export default function PatientsPage() {
                         'px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider',
                         isVibrant ? 'text-slate-700' : 'text-slate-600'
                       )}>
-                        Email
-                      </th>
-                      <th className={cn(
-                        'px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider',
-                        isVibrant ? 'text-slate-700' : 'text-slate-600'
-                      )}>
-                        CPF
-                      </th>
-                      <th className={cn(
-                        'px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider',
-                        isVibrant ? 'text-slate-700' : 'text-slate-600'
-                      )}>
-                        Preferência
+                        Abas
                       </th>
                       <th className={cn(
                         'px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider',
@@ -784,80 +808,35 @@ export default function PatientsPage() {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className={cn(
-                            'text-sm',
-                            isVibrant ? 'text-slate-700' : 'text-gray-700'
-                          )}>
-                            {patient.email || (
-                              <span className={cn('italic', isVibrant ? 'text-slate-400' : 'text-gray-400')}>
-                                Sem email
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className={cn(
-                            'text-sm',
-                            isVibrant ? 'text-slate-700' : 'text-gray-700'
-                          )}>
-                            {patient.cpf ? (
-                              patient.cpf.length === 11 
-                                ? patient.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
-                                : patient.cpf
-                            ) : (
-                              <span className={cn('italic', isVibrant ? 'text-slate-400' : 'text-gray-400')}>
-                                Sem CPF
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            {getNotificationIcon(patient.preferenciaNotificacao)}
-                            <span className={cn(
-                              'text-sm',
-                              isVibrant ? 'text-slate-700' : 'text-gray-700'
-                            )}>
-                              {getNotificationLabel(patient.preferenciaNotificacao)}
-                            </span>
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <Select
+                              value=""
+                              onValueChange={(value) => {
+                                if (value) {
+                                  handleTabSelect(patient.id, value);
+                                }
+                              }}
+                              className={cn(
+                                'w-full min-w-[180px] text-sm',
+                                isVibrant
+                                  ? 'border-white/30 bg-white/60 text-slate-800 focus:border-indigo-400 focus:ring-indigo-200'
+                                  : 'border-slate-300 bg-white text-slate-700 focus:border-blue-500 focus:ring-blue-200'
+                              )}
+                            >
+                              <option value="">Selecione uma aba...</option>
+                              {availableTabs.map((tab) => {
+                                const Icon = tab.icon;
+                                return (
+                                  <option key={tab.id} value={tab.id}>
+                                    {tab.label}
+                                  </option>
+                                );
+                              })}
+                            </Select>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEdit(patient);
-                              }}
-                              className={cn(
-                                isVibrant 
-                                  ? 'border-blue-200 hover:border-blue-400 text-slate-700 hover:bg-white/40 border-white/30' 
-                                  : isNeutral
-                                  ? 'border-slate-300 text-slate-700 hover:bg-slate-100 hover:border-slate-400'
-                                  : 'border-blue-200 hover:border-blue-400 hover:bg-blue-50'
-                              )}
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDelete(patient.id);
-                              }}
-                              className={cn(
-                                isVibrant 
-                                  ? 'text-red-600 hover:border-red-400 border-white/30 hover:bg-white/40' 
-                                  : isNeutral
-                                  ? 'text-slate-600 hover:border-slate-400 hover:bg-slate-100 border-slate-300'
-                                  : 'text-red-600 hover:border-red-400 hover:bg-red-50 border-red-200'
-                              )}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
                             <Button
                               variant="ghost"
                               size="sm"
@@ -877,6 +856,23 @@ export default function PatientsPage() {
                               style={isCustom && gradientColors ? { color: gradientColors.start } : undefined}
                             >
                               <FolderOpen className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEdit(patient);
+                              }}
+                              className={cn(
+                                isVibrant 
+                                  ? 'border-blue-200 hover:border-blue-400 text-slate-700 hover:bg-white/40 border-white/30' 
+                                  : isNeutral
+                                  ? 'border-slate-300 text-slate-700 hover:bg-slate-100 hover:border-slate-400'
+                                  : 'border-blue-200 hover:border-blue-400 hover:bg-blue-50'
+                              )}
+                            >
+                              <Edit className="w-4 h-4" />
                             </Button>
                           </div>
                         </td>
@@ -968,40 +964,6 @@ export default function PatientsPage() {
                     
                     <div className="flex gap-1">
                       <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEdit(patient);
-                        }}
-                        className={cn(
-                          isVibrant 
-                            ? 'border-blue-200 hover:border-blue-400 text-slate-700 hover:bg-white/40 border-white/30' 
-                            : isNeutral
-                            ? 'border-slate-300 text-slate-700 hover:bg-slate-100 hover:border-slate-400'
-                            : 'border-blue-200 hover:border-blue-400 hover:bg-blue-50'
-                        )}
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(patient.id);
-                        }}
-                        className={cn(
-                          isVibrant 
-                            ? 'text-red-600 hover:border-red-400 border-white/30 hover:bg-white/40' 
-                            : isNeutral
-                            ? 'text-slate-600 hover:border-slate-400 hover:bg-slate-100 border-slate-300'
-                            : 'text-red-600 hover:border-red-400 hover:bg-red-50 border-red-200'
-                        )}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                      <Button
                         variant="ghost"
                         size="sm"
                         onClick={(e) => {
@@ -1021,6 +983,23 @@ export default function PatientsPage() {
                       >
                         <FolderOpen className="w-4 h-4 mr-1" />
                         Ver ficha
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEdit(patient);
+                        }}
+                        className={cn(
+                          isVibrant 
+                            ? 'border-blue-200 hover:border-blue-400 text-slate-700 hover:bg-white/40 border-white/30' 
+                            : isNeutral
+                            ? 'border-slate-300 text-slate-700 hover:bg-slate-100 hover:border-slate-400'
+                            : 'border-blue-200 hover:border-blue-400 hover:bg-blue-50'
+                        )}
+                      >
+                        <Edit className="w-4 h-4" />
                       </Button>
                     </div>
                   </div>

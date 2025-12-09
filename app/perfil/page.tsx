@@ -496,7 +496,7 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <AccessGuard allowed={['owner', 'admin', 'pro', 'atendente']}>
+      <AccessGuard allowed={['owner', 'admin', 'pro', 'atendente', 'outro']}>
         <div className="app-page flex min-h-screen items-center justify-center px-4">
           <div className="app-card flex items-center gap-3 px-6 py-4">
             <LoadingSpinner size="lg" />
@@ -522,7 +522,7 @@ export default function ProfilePage() {
   const previewGradientColors = generateGradientColorsWithTwoColors(DOURADO_COLOR, DOURADO_COLOR);
 
   return (
-    <AccessGuard allowed={['owner', 'admin', 'pro', 'atendente']}>
+    <AccessGuard allowed={['owner', 'admin', 'pro', 'atendente', 'outro']}>
       <div className="app-page min-h-screen px-4 py-6 sm:px-6 lg:px-10">
         <div className="mx-auto max-w-6xl space-y-6">
           <motion.div

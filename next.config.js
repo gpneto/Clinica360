@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export', // Ativado para build estático para Firebase Hosting
+  // output: 'export' apenas quando BUILD_STATIC=true (para Firebase Hosting)
+  // Em desenvolvimento, não usar output: 'export' para evitar problemas com hot reload
+  ...(process.env.BUILD_STATIC === 'true' ? { output: 'export' } : {}),
   trailingSlash: true,
   images: {
     unoptimized: true,

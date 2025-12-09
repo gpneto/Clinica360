@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Stethoscope, Save } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Stethoscope, Save, Trash2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { usePatient } from '@/hooks/useFirestore';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { usePatient, usePatients } from '@/hooks/useFirestore';
 import { showError, showSuccess } from '@/components/ui/toast';
 import { startOfDay } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -25,7 +27,9 @@ export function DadosPacienteTab({
   singularLabel = 'paciente',
   singularTitle = 'Paciente',
 }: TabProps) {
+  const router = useRouter();
   const { patient, updatePatient } = usePatient(companyId, patientId || null);
+  const { deletePatient } = usePatients(companyId);
   const currentPatient = patientProp || patient;
   
   const [fichaData, setFichaData] = useState({
@@ -36,6 +40,7 @@ export function DadosPacienteTab({
     dataNascimento: '' as string,
   });
   const [savingFicha, setSavingFicha] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   // Carregar dados do paciente quando disponível
   useEffect(() => {
@@ -73,6 +78,24 @@ export function DadosPacienteTab({
       showError('Erro ao atualizar ficha clínica.');
     } finally {
       setSavingFicha(false);
+    }
+  };
+
+  const handleDelete = () => {
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!patientId) return;
+    
+    try {
+      await deletePatient(patientId);
+      showSuccess(`${singularTitle} excluído com sucesso.`);
+      setIsDeleteDialogOpen(false);
+      router.push('/pacientes');
+    } catch (error) {
+      console.error('Erro ao deletar paciente:', error);
+      showError('Erro ao excluir paciente. Tente novamente.');
     }
   };
 
@@ -246,8 +269,22 @@ export function DadosPacienteTab({
               initial={{ opacity: 0, y: 20, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ delay: 0.3 }}
-              className="flex justify-end pt-4 border-t border-slate-200"
+              className="flex justify-between items-center pt-4 border-t border-slate-200"
             >
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleDelete}
+                className={cn(
+                  'min-w-[140px] shadow-md hover:shadow-lg transition-all',
+                  isVibrant
+                    ? 'bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700'
+                    : 'bg-red-600 hover:bg-red-700'
+                )}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Excluir {singularTitle}
+              </Button>
               <Button
                 type="submit"
                 disabled={savingFicha}
@@ -277,6 +314,86 @@ export function DadosPacienteTab({
           </form>
         </CardContent>
       </Card>
+
+      {/* Dialog de Confirmação de Exclusão */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className={cn(
+          isVibrant 
+            ? 'bg-white/95 border-white/30 backdrop-blur-xl' 
+            : 'bg-white border-gray-200'
+        )}>
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className={cn(
+                'flex h-10 w-10 items-center justify-center rounded-full',
+                isVibrant
+                  ? 'bg-red-100 text-red-600'
+                  : 'bg-red-100 text-red-600'
+              )}>
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <DialogTitle className={cn(
+                'text-xl font-bold',
+                isVibrant ? 'text-slate-900' : 'text-gray-900'
+              )}>
+                Confirmar Exclusão
+              </DialogTitle>
+            </div>
+            <DialogDescription className={cn(
+              'text-base mt-4',
+              isVibrant ? 'text-slate-700' : 'text-gray-700'
+            )}>
+              Tem certeza que deseja deletar este {singularLabel}?
+            </DialogDescription>
+            <div className={cn(
+              'mt-4 p-4 rounded-lg border-2',
+              isVibrant
+                ? 'bg-red-50/80 border-red-200/50'
+                : 'bg-red-50 border-red-200'
+            )}>
+              <p className={cn(
+                'text-sm font-semibold mb-2',
+                isVibrant ? 'text-red-800' : 'text-red-800'
+              )}>
+                ⚠️ Atenção: Esta ação não pode ser desfeita!
+              </p>
+              <ul className={cn(
+                'text-sm space-y-1 list-disc list-inside',
+                isVibrant ? 'text-red-700' : 'text-red-700'
+              )}>
+                <li>Todas as informações do {singularLabel} serão permanentemente excluídas</li>
+                <li>Todos os agendamentos relacionados serão perdidos</li>
+                <li>Histórico de evoluções, procedimentos e documentos serão removidos</li>
+              </ul>
+            </div>
+          </DialogHeader>
+          <DialogFooter className="gap-2 mt-6">
+            <Button
+              variant="outline"
+              onClick={() => setIsDeleteDialogOpen(false)}
+              className={cn(
+                isVibrant
+                  ? 'border-white/30 hover:bg-white/40'
+                  : 'border-gray-300 hover:bg-gray-100'
+              )}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDelete}
+              className={cn(
+                'text-white shadow-lg',
+                isVibrant
+                  ? 'bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700'
+                  : 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800'
+              )}
+            >
+              Sim, Deletar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 }

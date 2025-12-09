@@ -3,6 +3,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { Combobox, Transition } from '@headlessui/react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,7 +19,9 @@ import {
   Check,
   ChevronsUpDown,
   Save,
-  Search
+  Search,
+  Package,
+  AlertCircle
 } from 'lucide-react';
 import { useProfessionals, useServices, usePatients, useAppointments, useCompanySettings } from '@/hooks/useFirestore';
 import { useAuth } from '@/lib/auth-context';
@@ -72,6 +75,7 @@ export function MobileAppointmentForm({
   initialStep = 1,
   rescheduleMode = false
 }: MobileAppointmentFormProps) {
+  const router = useRouter();
   const { companyId, user, professionalId, role, themePreference, customColor, customColor2 } = useAuth();
   const { settings: companySettings } = useCompanySettings(companyId);
   const confirmacaoAutomatica = companySettings?.confirmacaoAutomatica !== false;
@@ -2727,9 +2731,47 @@ export function MobileAppointmentForm({
             </div>
 
             <div className="flex-1 overflow-y-auto p-2">
-              {filteredServices.length === 0 ? (
+              {services.length === 0 ? (
+                <div className="text-center py-12 px-4">
+                  <div className={cn(
+                    'mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full',
+                    isVibrant
+                      ? 'bg-indigo-100 text-indigo-600'
+                      : 'bg-blue-100 text-blue-600'
+                  )}>
+                    <Package className="w-8 h-8" />
+                  </div>
+                  <h3 className={cn(
+                    'text-lg font-semibold mb-2',
+                    isVibrant ? 'text-slate-900' : 'text-gray-900'
+                  )}>
+                    Nenhum serviço cadastrado
+                  </h3>
+                  <p className={cn(
+                    'text-sm mb-6',
+                    isVibrant ? 'text-slate-600' : 'text-gray-600'
+                  )}>
+                    Você precisa cadastrar serviços antes de criar agendamentos.
+                  </p>
+                  <Button
+                    onClick={() => {
+                      setShowServiceModal(false);
+                      router.push('/servicos');
+                    }}
+                    className={cn(
+                      'w-full',
+                      isVibrant
+                        ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                        : 'bg-blue-600 hover:bg-blue-700 text-white'
+                    )}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Cadastrar Serviços
+                  </Button>
+                </div>
+              ) : filteredServices.length === 0 ? (
                 <div className="text-center py-12">
-                  <p className="text-slate-500">Nenhum serviço encontrado</p>
+                  <p className="text-slate-500">Nenhum serviço encontrado para "{serviceQuery}"</p>
                 </div>
               ) : (
                 <div className="space-y-1">
