@@ -181,6 +181,19 @@ export function PermissionsModal({
             <div className="space-y-3 pl-4">
               <div className="flex items-start space-x-3">
                 <Checkbox
+                  id="menuAgenda"
+                  checked={permissions.menuAgenda}
+                  onCheckedChange={(checked) => handleCheckboxChange('menuAgenda', checked as boolean)}
+                />
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="menuAgenda" className="font-medium cursor-pointer">
+                    Menu de Agenda
+                  </Label>
+                </div>
+              </div>
+
+              <div className="flex items-start space-x-3">
+                <Checkbox
                   id="menuProfissionais"
                   checked={permissions.menuProfissionais}
                   onCheckedChange={(checked) => handleCheckboxChange('menuProfissionais', checked as boolean)}
@@ -214,6 +227,19 @@ export function PermissionsModal({
                 <div className="flex-1 space-y-1">
                   <Label htmlFor="menuServicos" className="font-medium cursor-pointer">
                     Menu de Serviços
+                  </Label>
+                </div>
+              </div>
+
+              <div className="flex items-start space-x-3">
+                <Checkbox
+                  id="menuMensagens"
+                  checked={permissions.menuMensagens}
+                  onCheckedChange={(checked) => handleCheckboxChange('menuMensagens', checked as boolean)}
+                />
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="menuMensagens" className="font-medium cursor-pointer">
+                    Menu de Mensagens
                   </Label>
                 </div>
               </div>

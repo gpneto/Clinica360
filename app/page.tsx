@@ -21,10 +21,10 @@ export default function Home() {
   const hasRedirectedRef = useRef(false);
   
   // Verificar pathname ANTES de qualquer renderização para evitar loops
-  // Se já estiver em /login ou /signin, retornar null imediatamente
+  // Se já estiver em /login ou /home, retornar null imediatamente
   if (typeof window !== 'undefined') {
     const pathname = window.location.pathname.replace(/\/$/, '');
-    if (pathname === '/login' || pathname === '/signin') {
+    if (pathname === '/login' || pathname === '/home') {
       return null;
     }
   }
@@ -45,8 +45,8 @@ export default function Home() {
       const hostname = window.location.hostname;
       const pathname = window.location.pathname.replace(/\/$/, ''); // Remove trailing slash
       
-      // Se já estiver em /login ou /signin, não fazer nada
-      if (pathname === '/login' || pathname === '/signin') {
+      // Se já estiver em /login ou /home, não fazer nada
+      if (pathname === '/login' || pathname === '/home') {
         return;
       }
       
@@ -58,10 +58,10 @@ export default function Home() {
         return;
       }
       
-      // Se não for texai.online e não estiver autenticado, redirecionar para /signin
+      // Se não for texai.online e não estiver autenticado, redirecionar para /home
       if (!loading && !user) {
         hasRedirectedRef.current = true;
-        window.location.replace('/signin');
+        window.location.replace('/home');
       }
     }
   }, [user, loading]);

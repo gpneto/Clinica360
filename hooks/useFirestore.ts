@@ -2144,7 +2144,7 @@ export function useCompanies() {
   const createCompany = async (data: Omit<Company, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
       const now = Timestamp.now();
-      const trialEnds = Timestamp.fromDate(new Date(now.toDate().getTime() + 15 * 24 * 60 * 60 * 1000));
+      const trialEnds = Timestamp.fromDate(new Date(now.toDate().getTime() + 90 * 24 * 60 * 60 * 1000));
       await addDoc(collection(db, 'companies'), {
         ...data,
         ativo: data.ativo ?? true,

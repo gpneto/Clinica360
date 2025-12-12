@@ -52,7 +52,7 @@ export default function SetupPage() {
   useEffect(() => {
     if (!loading) {
       if (!user) {
-        router.replace('/signin');
+        router.replace('/home');
       } else if (!needsCompanySetup) {
         router.replace('/agenda');
       }
@@ -177,7 +177,7 @@ export default function SetupPage() {
     try {
       setSubmitting(true);
       const now = Timestamp.now();
-      const trialEnds = Timestamp.fromDate(new Date(now.toDate().getTime() + 15 * 24 * 60 * 60 * 1000));
+      const trialEnds = Timestamp.fromDate(new Date(now.toDate().getTime() + 90 * 24 * 60 * 60 * 1000));
       const companyDoc = await addDoc(collection(db, 'companies'), {
         nome: companyName,
         tipoEstabelecimento: tipoEstabelecimento || null,

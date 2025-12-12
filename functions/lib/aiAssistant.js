@@ -1171,31 +1171,41 @@ async function createAppointment(params) {
     // Obter data atual no timezone do Brasil usando Luxon
     const nowBrazil = luxon_1.DateTime.now().setZone(TIMEZONE_BRASIL);
     const now = nowBrazil.toJSDate();
-    // Comparar apenas data e hora, permitindo margem de 5 minutos para evitar problemas de sincronização
-    // e permitir agendamentos para o mesmo dia/hora atual
-    const fiveMinutesAgo = new Date(now.getTime() - 5 * 60000);
-    if (inicioDateCheck < fiveMinutesAgo) {
-        const formattedDate = inicioDateCheck.toLocaleString('pt-BR', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
-        const todayFormatted = now.toLocaleString('pt-BR', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
-        console.warn('[createAppointment] Tentativa de criar agendamento no passado:', {
+    // Comparar apenas a data (dia/mês/ano) e hora, permitindo agendamentos para hoje
+    // mesmo que a hora seja próxima ou já tenha passado (até 1 hora atrás para permitir reagendamentos)
+    const inicioDateBrazil = luxon_1.DateTime.fromJSDate(inicioDateCheck).setZone(TIMEZONE_BRASIL);
+    const nowDateBrazil = nowBrazil;
+    // Comparar data (ano, mês, dia) primeiro
+    const isSameDay = inicioDateBrazil.hasSame(nowDateBrazil, 'day');
+    const isFutureDay = inicioDateBrazil > nowDateBrazil;
+    // Se for hoje, permitir agendamentos até 1 hora atrás (para permitir reagendamentos)
+    // Se for um dia futuro, sempre permitir
+    if (!isSameDay && !isFutureDay) {
+        // É um dia passado (não é hoje nem futuro)
+        const formattedDate = inicioDateBrazil.toFormat('dd/MM/yyyy HH:mm');
+        const todayFormatted = nowDateBrazil.toFormat('dd/MM/yyyy HH:mm');
+        console.warn('[createAppointment] Tentativa de criar agendamento em dia passado:', {
             dataInformada: formattedDate,
             dataAtual: todayFormatted,
             inicioISO: inicio,
             nowISO: now.toISOString(),
         });
-        throw new Error(`A data informada (${formattedDate}) está no passado. Por favor, informe uma data futura.`);
+        throw new Error(`A data informada (${formattedDate}) está no passado. Por favor, informe uma data de hoje ou futura.`);
+    }
+    // Se for hoje, verificar se a hora já passou (com margem de 1 hora para reagendamentos)
+    if (isSameDay) {
+        const oneHourAgo = nowDateBrazil.minus({ hours: 1 });
+        if (inicioDateBrazil < oneHourAgo) {
+            const formattedDate = inicioDateBrazil.toFormat('dd/MM/yyyy HH:mm');
+            const todayFormatted = nowDateBrazil.toFormat('dd/MM/yyyy HH:mm');
+            console.warn('[createAppointment] Tentativa de criar agendamento com horário muito no passado (mais de 1 hora):', {
+                dataInformada: formattedDate,
+                dataAtual: todayFormatted,
+                inicioISO: inicio,
+                nowISO: now.toISOString(),
+            });
+            throw new Error(`O horário informado (${formattedDate}) já passou há mais de 1 hora. Por favor, informe um horário mais recente ou futuro.`);
+        }
     }
     // Resolver IDs a partir de nomes se necessário
     let finalProfessionalId = professionalId;
@@ -1689,9 +1699,12 @@ exports.aiAssistant = (0, https_1.onCall)({ secrets: [OPENAI_API_KEY], memory: '
         const todayFormatted = brazilDates.today.formatted;
         const tomorrowStr = brazilDates.tomorrow.date;
         const tomorrowFormatted = brazilDates.tomorrow.formatted;
+        const nowFormatted = brazilDates.now.toFormat('dd/MM/yyyy HH:mm');
+        const currentHour = brazilDates.now.toFormat('HH:mm');
         console.log('[aiAssistant] 📅 Datas calculadas (Luxon):', {
             hoje: { date: todayStr, formatted: todayFormatted },
             amanha: { date: tomorrowStr, formatted: tomorrowFormatted },
+            agora: { formatted: nowFormatted, hora: currentHour },
             timestamp: brazilDates.now.toISO()
         });
         logTime('Datas calculadas');
@@ -1746,7 +1759,16 @@ NUNCA invente ou calcule datas diferentes. Use EXATAMENTE as datas fornecidas ac
             },
             {
                 name: 'createAppointment',
-                description: 'Cria um novo agendamento para QUALQUER data futura. IMPORTANTE: Esta função SEMPRE retorna um resumo para confirmação primeiro (com needsConfirmation=true). Só cria o agendamento quando confirm=true. Pode usar nomes ou IDs para profissional, cliente e serviço. Se usar nomes, a função buscará os IDs automaticamente. Se não informar profissional e houver apenas um profissional ativo, será usado automaticamente. Se houver múltiplos profissionais, a função retornará uma lista numerada para escolha. Para datas: aceite qualquer data futura mencionada pelo usuário (ex: "dia 27", "27 de novembro", "próxima semana"). Calcule a data no formato ISO (YYYY-MM-DDTHH:mm) e use normalmente. NUNCA recuse criar agendamentos para datas futuras.',
+                description: `Cria um novo agendamento para QUALQUER data futura ou para HOJE com horário futuro. IMPORTANTE: Esta função SEMPRE retorna um resumo para confirmação primeiro (com needsConfirmation=true). Só cria o agendamento quando confirm=true. Pode usar nomes ou IDs para profissional, cliente e serviço. Se usar nomes, a função buscará os IDs automaticamente. Se não informar profissional e houver apenas um profissional ativo, será usado automaticamente. Se houver múltiplos profissionais, a função retornará uma lista numerada para escolha. 
+
+CRÍTICO - HORÁRIOS:
+- Hora atual: ${currentHour}
+- Data de HOJE: ${todayStr} (${todayFormatted})
+- Você PODE criar agendamentos para HOJE se o horário for ${currentHour} ou posterior
+- Você PODE criar agendamentos para QUALQUER data futura
+- NUNCA recuse criar agendamentos para datas futuras ou para hoje com horário futuro
+
+Para datas: aceite qualquer data futura mencionada pelo usuário (ex: "dia 27", "27 de novembro", "próxima semana"). Calcule a data no formato ISO (YYYY-MM-DDTHH:mm) e use normalmente.`,
                 parameters: {
                     type: 'object',
                     properties: {
@@ -1780,7 +1802,7 @@ NUNCA invente ou calcule datas diferentes. Use EXATAMENTE as datas fornecidas ac
                         },
                         inicio: {
                             type: 'string',
-                            description: 'Data e hora de início no formato ISO (ex: 2025-11-27T10:00:00). OBRIGATÓRIO. Aceita QUALQUER data futura. Quando o usuário mencionar uma data específica (ex: "dia 27", "27 de novembro"), calcule a data correta no formato ISO. Se não especificar hora, use um horário padrão razoável (ex: 10:00 ou 14:00).',
+                            description: `Data e hora de início no formato ISO (ex: 2025-11-27T10:00:00). OBRIGATÓRIO. Aceita QUALQUER data futura ou HOJE com horário futuro. HORA ATUAL: ${currentHour}. Data de HOJE: ${todayStr}. Quando o usuário mencionar uma data específica (ex: "dia 27", "27 de novembro"), calcule a data correta no formato ISO. Se o usuário pedir um agendamento para hoje com horário ${currentHour} ou posterior, você DEVE criar normalmente. Se não especificar hora, use um horário padrão razoável (ex: 10:00 ou 14:00).`,
                         },
                         fim: {
                             type: 'string',
@@ -1880,14 +1902,16 @@ NUNCA invente ou calcule datas diferentes. Use EXATAMENTE as datas fornecidas ac
             role: 'system',
             content: `Você é um assistente para sistema de agendamento de consultas.
 
-📅 DATAS ATUAIS (referência):
+📅 DATAS E HORÁRIOS ATUAIS (referência):
 - HOJE: ${todayStr} (${todayFormatted})
 - AMANHÃ: ${tomorrowStr} (${tomorrowFormatted})
+- AGORA: ${nowFormatted} (hora atual: ${currentHour})
 - Quando perguntar "que dia é hoje?", responda: "Hoje é ${todayFormatted}"
 - Quando perguntar "que dia é amanhã?", responda: "Amanhã será ${tomorrowFormatted}"
+- Quando perguntar "que horas são?", responda: "Agora são ${currentHour}"
 
 📋 REGRAS PRINCIPAIS:
-1. DATAS: Você PODE criar agendamentos para QUALQUER data futura. Use "${todayStr}" apenas quando o usuário mencionar "hoje" e "${tomorrowStr}" quando mencionar "amanhã". Para outras datas (ex: "dia 27", "27 de novembro"), calcule a data correta no formato ISO (YYYY-MM-DDTHH:mm) e use normalmente. NUNCA recuse criar agendamentos para datas futuras.
+1. DATAS E HORÁRIOS: Você PODE criar agendamentos para QUALQUER data futura ou para HOJE com horário futuro. Use "${todayStr}" apenas quando o usuário mencionar "hoje" e "${tomorrowStr}" quando mencionar "amanhã". Para outras datas (ex: "dia 27", "27 de novembro"), calcule a data correta no formato ISO (YYYY-MM-DDTHH:mm) e use normalmente. IMPORTANTE: A hora atual é ${currentHour}. Se o usuário pedir um agendamento para hoje com horário ${currentHour} ou posterior, você DEVE criar normalmente. NUNCA recuse criar agendamentos para datas futuras ou para hoje com horário futuro.
 2. FORMATO DE AGENDAMENTOS: **Paciente:** [patientName] | **Profissional:** [professionalName] | **Serviço:** [serviceName] | **Data:** [formato BR] | **Horário:** [24h] | **Status:** [status]
 3. NOMES/IDs: Aceite nomes ou IDs. Use campos *Name quando o usuário mencionar nomes.
 4. CONFIRMAÇÃO: createAppointment retorna resumo primeiro. Use confirm=true apenas após confirmação do usuário.

@@ -1,0 +1,21 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Fundo circular -->
+  <circle cx="32" cy="32" r="30" fill="#89bf47"/>
+  
+  <!-- Elementos organizados - representando gestão integrada -->
+  <!-- Quadrado superior esquerdo -->
+  <rect x="18" y="18" width="10" height="10" rx="2" fill="white" fill-opacity="0.9"/>
+  
+  <!-- Círculo central -->
+  <circle cx="32" cy="32" r="6" fill="white" fill-opacity="0.9"/>
+  
+  <!-- Quadrado inferior direito -->
+  <rect x="36" y="36" width="10" height="10" rx="2" fill="white" fill-opacity="0.9"/>
+  
+  <!-- Linhas de conexão -->
+  <line x1="28" y1="23" x2="28" y2="28" stroke="#89bf47" stroke-width="2" stroke-linecap="round"/>
+  <line x1="36" y1="36" x2="36" y2="32" stroke="#89bf47" stroke-width="2" stroke-linecap="round"/>
+  
+  <!-- Anel decorativo -->
+  <circle cx="32" cy="32" r="28" stroke="white" stroke-width="1.5" fill="none" opacity="0.2"/>
+</svg>

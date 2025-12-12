@@ -351,7 +351,7 @@ export default function PatientsPage() {
             <p className="text-gray-600 mb-4">
               Não foi possível identificar a empresa. Por favor, faça login novamente.
             </p>
-            <Button onClick={() => window.location.href = '/signin'} variant="outline">
+            <Button onClick={() => window.location.href = '/home'} variant="outline">
               Ir para Login
             </Button>
           </div>

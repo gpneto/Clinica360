@@ -222,7 +222,7 @@ export default function ContextSelectionPage() {
   }
 
   if (!user) {
-    router.push('/signin');
+    router.push('/home');
     return null;
   }
 
@@ -242,7 +242,7 @@ export default function ContextSelectionPage() {
             Você não tem acesso a nenhuma empresa cadastrada.
           </p>
           <button
-            onClick={() => router.push('/signin')}
+            onClick={() => router.push('/home')}
             className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
           >
             Voltar ao Login

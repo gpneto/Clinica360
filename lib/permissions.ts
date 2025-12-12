@@ -134,6 +134,26 @@ export function hasFullFinancialAccess(user: UserWithPermissions | User | null):
 }
 
 /**
+ * Verifica se o usuário pode acessar o menu de Agenda
+ */
+export function canAccessAgendaMenu(user: UserWithPermissions | User | null): boolean {
+  if (!user) return false;
+  
+  // Owner e admin têm acesso total
+  if (hasFullAccess(user)) return true;
+  
+  // Pro e atendente têm acesso padrão
+  if (user.role === 'pro' || user.role === 'atendente') return true;
+  
+  // Para tipo 'outro', verificar permissão granular
+  if (isOtherRole(user)) {
+    return user.permissions?.menuAgenda || false;
+  }
+  
+  return false;
+}
+
+/**
  * Verifica se o usuário pode acessar o menu de Profissionais
  */
 export function canAccessProfessionalsMenu(user: UserWithPermissions | User | null): boolean {
@@ -159,13 +179,13 @@ export function canAccessClientsMenu(user: UserWithPermissions | User | null): b
   // Owner e admin têm acesso total
   if (hasFullAccess(user)) return true;
   
+  // Pro e atendente têm acesso padrão
+  if (user.role === 'pro' || user.role === 'atendente') return true;
+  
   // Para tipo 'outro', verificar permissão granular
   if (isOtherRole(user)) {
     return user.permissions?.menuClientes || false;
   }
-  
-  // Atendente tem permissão padrão (para manter compatibilidade)
-  if (user.role === 'atendente') return true;
   
   return false;
 }
@@ -179,9 +199,32 @@ export function canAccessServicesMenu(user: UserWithPermissions | User | null): 
   // Owner e admin têm acesso total
   if (hasFullAccess(user)) return true;
   
+  // Pro e atendente têm acesso padrão
+  if (user.role === 'pro' || user.role === 'atendente') return true;
+  
   // Para tipo 'outro', verificar permissão granular
   if (isOtherRole(user)) {
     return user.permissions?.menuServicos || false;
+  }
+  
+  return false;
+}
+
+/**
+ * Verifica se o usuário pode acessar o menu de Mensagens
+ */
+export function canAccessMessagesMenu(user: UserWithPermissions | User | null): boolean {
+  if (!user) return false;
+  
+  // Owner e admin têm acesso total
+  if (hasFullAccess(user)) return true;
+  
+  // Pro e atendente têm acesso padrão
+  if (user.role === 'pro' || user.role === 'atendente') return true;
+  
+  // Para tipo 'outro', verificar permissão granular
+  if (isOtherRole(user)) {
+    return user.permissions?.menuMensagens || false;
   }
   
   return false;
@@ -197,9 +240,11 @@ export function createDefaultPermissions(): GranularPermissions {
     financeiroDebitosPacientes: false,
     financeiroApenasProprios: false,
     financeiroAcessoCompleto: false,
+    menuAgenda: false,
     menuProfissionais: false,
     menuClientes: false,
     menuServicos: false,
+    menuMensagens: false,
   };
 }
 

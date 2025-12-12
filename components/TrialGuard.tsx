@@ -38,7 +38,7 @@ export default function TrialGuard() {
     return { isExpired: days <= 0, daysLeft: days };
   }, [company]);
 
-  const whatsappHref = 'https://wa.me/5551981987430?text=Ol%C3%A1%2C%20quero%20assinar%20o%20Cl%C3%ADnica%20360';
+  const whatsappHref = 'https://wa.me/5551995279117?text=Ol%C3%A1%2C%20quero%20assinar%20o%20AllOne';
 
   // Se expirou e não há assinatura, bloquear com overlay
   if (company && !company.subscriptionActive && isExpired) {
@@ -47,7 +47,7 @@ export default function TrialGuard() {
         <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl p-6 text-center">
           <h2 className="text-2xl font-bold text-slate-900">Período de teste encerrado</h2>
           <p className="text-slate-600 mt-2">
-            Seu trial de 15 dias terminou. Para continuar utilizando, entre em contato.
+            Seu período de teste de 90 dias terminou. Para continuar utilizando, entre em contato.
           </p>
           <a
             href="/plano"
@@ -61,7 +61,7 @@ export default function TrialGuard() {
             rel="noopener noreferrer"
             className="mt-5 inline-flex items-center justify-center px-5 py-3 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-700 transition-colors w-full"
           >
-            Falar no WhatsApp (51) 981987430
+            Falar no WhatsApp (51) 995279117
           </a>
         </div>
       </div>
@@ -69,7 +69,7 @@ export default function TrialGuard() {
   }
 
   // Se está em trial (faltam dias) e não foi dispensado, mostrar banner
-  if (company && !company.subscriptionActive && daysLeft !== null && daysLeft <= 15 && !dismissed) {
+  if (company && !company.subscriptionActive && daysLeft !== null && daysLeft <= 90 && !dismissed) {
     return (
       <div className="fixed left-0 right-0 top-0 z-[1500]">
         <div className="mx-auto max-w-screen-2xl p-3">

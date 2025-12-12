@@ -11,6 +11,8 @@ import {
   canAccessProfessionalsMenu,
   canAccessClientsMenu,
   canAccessServicesMenu,
+  canAccessAgendaMenu,
+  canAccessMessagesMenu,
   createDefaultPermissions,
 } from '@/lib/permissions';
 import type { User, GranularPermissions } from '@/types';
@@ -255,9 +257,11 @@ describe('Funções de Permissões', () => {
           financeiroDebitosPacientes: false,
           financeiroApenasProprios: false,
           financeiroAcessoCompleto: false,
+          menuAgenda: false,
           menuProfissionais: false,
           menuClientes: false,
           menuServicos: false,
+          menuMensagens: false,
         },
       };
       expect(canEditAppointments(user)).toBe(false);
@@ -353,9 +357,11 @@ describe('Funções de Permissões', () => {
           financeiroDebitosPacientes: false,
           financeiroApenasProprios: false,
           financeiroAcessoCompleto: false,
+          menuAgenda: false,
           menuProfissionais: false,
           menuClientes: false,
           menuServicos: false,
+          menuMensagens: false,
         },
       };
       expect(canViewAllAgendas(user)).toBe(false);
@@ -451,9 +457,11 @@ describe('Funções de Permissões', () => {
           financeiroDebitosPacientes: false,
           financeiroApenasProprios: false,
           financeiroAcessoCompleto: false,
+          menuAgenda: false,
           menuProfissionais: false,
           menuClientes: false,
           menuServicos: false,
+          menuMensagens: false,
         },
       };
       expect(canAccessPatientDebits(user)).toBe(false);
@@ -537,9 +545,11 @@ describe('Funções de Permissões', () => {
           financeiroDebitosPacientes: false,
           financeiroApenasProprios: false,
           financeiroAcessoCompleto: false,
+          menuAgenda: false,
           menuProfissionais: false,
           menuClientes: false,
           menuServicos: false,
+          menuMensagens: false,
         },
       };
       expect(canAccessOnlyOwnFinancials(user)).toBe(false);
@@ -635,9 +645,11 @@ describe('Funções de Permissões', () => {
           financeiroDebitosPacientes: false,
           financeiroApenasProprios: false,
           financeiroAcessoCompleto: false,
+          menuAgenda: false,
           menuProfissionais: false,
           menuClientes: false,
           menuServicos: false,
+          menuMensagens: false,
         },
       };
       expect(hasFullFinancialAccess(user)).toBe(false);
@@ -733,9 +745,11 @@ describe('Funções de Permissões', () => {
           financeiroDebitosPacientes: false,
           financeiroApenasProprios: false,
           financeiroAcessoCompleto: false,
+          menuAgenda: false,
           menuProfissionais: false,
           menuClientes: false,
           menuServicos: false,
+          menuMensagens: false,
         },
       };
       expect(canAccessProfessionalsMenu(user)).toBe(false);
@@ -771,7 +785,7 @@ describe('Funções de Permissões', () => {
       expect(canAccessClientsMenu(user)).toBe(true);
     });
 
-    it('deve retornar false para profissional', () => {
+    it('deve retornar true para profissional', () => {
       const user: User = {
         uid: 'user3',
         role: 'pro',
@@ -780,7 +794,7 @@ describe('Funções de Permissões', () => {
         ativo: true,
         companyId: 'company1',
       };
-      expect(canAccessClientsMenu(user)).toBe(false);
+      expect(canAccessClientsMenu(user)).toBe(true);
     });
 
     it('deve retornar true para atendente', () => {
@@ -831,9 +845,11 @@ describe('Funções de Permissões', () => {
           financeiroDebitosPacientes: false,
           financeiroApenasProprios: false,
           financeiroAcessoCompleto: false,
+          menuAgenda: false,
           menuProfissionais: false,
           menuClientes: false,
           menuServicos: false,
+          menuMensagens: false,
         },
       };
       expect(canAccessClientsMenu(user)).toBe(false);
@@ -869,7 +885,7 @@ describe('Funções de Permissões', () => {
       expect(canAccessServicesMenu(user)).toBe(true);
     });
 
-    it('deve retornar false para profissional', () => {
+    it('deve retornar true para profissional', () => {
       const user: User = {
         uid: 'user3',
         role: 'pro',
@@ -878,10 +894,10 @@ describe('Funções de Permissões', () => {
         ativo: true,
         companyId: 'company1',
       };
-      expect(canAccessServicesMenu(user)).toBe(false);
+      expect(canAccessServicesMenu(user)).toBe(true);
     });
 
-    it('deve retornar false para atendente', () => {
+    it('deve retornar true para atendente', () => {
       const user: User = {
         uid: 'user4',
         role: 'atendente',
@@ -890,7 +906,7 @@ describe('Funções de Permissões', () => {
         ativo: true,
         companyId: 'company1',
       };
-      expect(canAccessServicesMenu(user)).toBe(false);
+      expect(canAccessServicesMenu(user)).toBe(true);
     });
 
     it('deve retornar true para outro com permissão menuServicos', () => {
@@ -929,9 +945,11 @@ describe('Funções de Permissões', () => {
           financeiroDebitosPacientes: false,
           financeiroApenasProprios: false,
           financeiroAcessoCompleto: false,
+          menuAgenda: false,
           menuProfissionais: false,
           menuClientes: false,
           menuServicos: false,
+          menuMensagens: false,
         },
       };
       expect(canAccessServicesMenu(user)).toBe(false);
@@ -952,9 +970,11 @@ describe('Funções de Permissões', () => {
         financeiroDebitosPacientes: false,
         financeiroApenasProprios: false,
         financeiroAcessoCompleto: false,
+        menuAgenda: false,
         menuProfissionais: false,
         menuClientes: false,
         menuServicos: false,
+        menuMensagens: false,
       });
     });
 
@@ -966,9 +986,11 @@ describe('Funções de Permissões', () => {
       expect(permissions).toHaveProperty('financeiroDebitosPacientes');
       expect(permissions).toHaveProperty('financeiroApenasProprios');
       expect(permissions).toHaveProperty('financeiroAcessoCompleto');
+      expect(permissions).toHaveProperty('menuAgenda');
       expect(permissions).toHaveProperty('menuProfissionais');
       expect(permissions).toHaveProperty('menuClientes');
       expect(permissions).toHaveProperty('menuServicos');
+      expect(permissions).toHaveProperty('menuMensagens');
     });
 
     it('deve retornar novo objeto a cada chamada', () => {
@@ -997,9 +1019,11 @@ describe('Funções de Permissões', () => {
       expect(canAccessPatientDebits(user)).toBe(false);
       expect(canAccessOnlyOwnFinancials(user)).toBe(false);
       expect(hasFullFinancialAccess(user)).toBe(false);
+      expect(canAccessAgendaMenu(user)).toBe(false);
       expect(canAccessProfessionalsMenu(user)).toBe(false);
       expect(canAccessClientsMenu(user)).toBe(false);
       expect(canAccessServicesMenu(user)).toBe(false);
+      expect(canAccessMessagesMenu(user)).toBe(false);
     });
 
     it('deve lidar com permissões parcialmente definidas', () => {
@@ -1016,9 +1040,11 @@ describe('Funções de Permissões', () => {
           financeiroDebitosPacientes: false,
           financeiroApenasProprios: false,
           financeiroAcessoCompleto: false,
+          menuAgenda: false,
           menuProfissionais: false,
           menuClientes: false,
           menuServicos: false,
+          menuMensagens: false,
         },
       };
       
@@ -1040,9 +1066,11 @@ describe('Funções de Permissões', () => {
           financeiroDebitosPacientes: true,
           financeiroApenasProprios: false,
           financeiroAcessoCompleto: true,
+          menuAgenda: true,
           menuProfissionais: true,
           menuClientes: true,
           menuServicos: true,
+          menuMensagens: true,
         },
       };
       
@@ -1051,9 +1079,215 @@ describe('Funções de Permissões', () => {
       expect(canAccessPatientDebits(user)).toBe(true);
       expect(canAccessOnlyOwnFinancials(user)).toBe(false);
       expect(hasFullFinancialAccess(user)).toBe(true);
+      expect(canAccessAgendaMenu(user)).toBe(true);
       expect(canAccessProfessionalsMenu(user)).toBe(true);
       expect(canAccessClientsMenu(user)).toBe(true);
       expect(canAccessServicesMenu(user)).toBe(true);
+      expect(canAccessMessagesMenu(user)).toBe(true);
+    });
+  });
+
+  describe('canAccessAgendaMenu', () => {
+    it('deve retornar true para owner', () => {
+      const user: User = {
+        uid: 'user1',
+        role: 'owner',
+        nome: 'Owner',
+        email: 'owner@test.com',
+        ativo: true,
+        companyId: 'company1',
+      };
+      expect(canAccessAgendaMenu(user)).toBe(true);
+    });
+
+    it('deve retornar true para admin', () => {
+      const user: User = {
+        uid: 'user2',
+        role: 'admin',
+        nome: 'Admin',
+        email: 'admin@test.com',
+        ativo: true,
+        companyId: 'company1',
+      };
+      expect(canAccessAgendaMenu(user)).toBe(true);
+    });
+
+    it('deve retornar true para profissional', () => {
+      const user: User = {
+        uid: 'user3',
+        role: 'pro',
+        nome: 'Profissional',
+        email: 'pro@test.com',
+        ativo: true,
+        companyId: 'company1',
+      };
+      expect(canAccessAgendaMenu(user)).toBe(true);
+    });
+
+    it('deve retornar true para atendente', () => {
+      const user: User = {
+        uid: 'user4',
+        role: 'atendente',
+        nome: 'Atendente',
+        email: 'atendente@test.com',
+        ativo: true,
+        companyId: 'company1',
+      };
+      expect(canAccessAgendaMenu(user)).toBe(true);
+    });
+
+    it('deve retornar true para outro com permissão menuAgenda', () => {
+      const user: User = {
+        uid: 'user5',
+        role: 'outro',
+        nome: 'Outro',
+        email: 'outro@test.com',
+        ativo: true,
+        companyId: 'company1',
+        permissions: {
+          agendaEdicao: false,
+          agendaVisualizacao: false,
+          financeiroDebitosPacientes: false,
+          financeiroApenasProprios: false,
+          financeiroAcessoCompleto: false,
+          menuAgenda: true,
+          menuProfissionais: false,
+          menuClientes: false,
+          menuServicos: false,
+          menuMensagens: false,
+        },
+      };
+      expect(canAccessAgendaMenu(user)).toBe(true);
+    });
+
+    it('deve retornar false para outro sem permissão menuAgenda', () => {
+      const user: User = {
+        uid: 'user6',
+        role: 'outro',
+        nome: 'Outro',
+        email: 'outro@test.com',
+        ativo: true,
+        companyId: 'company1',
+        permissions: {
+          agendaEdicao: false,
+          agendaVisualizacao: false,
+          financeiroDebitosPacientes: false,
+          financeiroApenasProprios: false,
+          financeiroAcessoCompleto: false,
+          menuAgenda: false,
+          menuProfissionais: false,
+          menuClientes: false,
+          menuServicos: false,
+          menuMensagens: false,
+        },
+      };
+      expect(canAccessAgendaMenu(user)).toBe(false);
+    });
+
+    it('deve retornar false para null', () => {
+      expect(canAccessAgendaMenu(null)).toBe(false);
+    });
+  });
+
+  describe('canAccessMessagesMenu', () => {
+    it('deve retornar true para owner', () => {
+      const user: User = {
+        uid: 'user1',
+        role: 'owner',
+        nome: 'Owner',
+        email: 'owner@test.com',
+        ativo: true,
+        companyId: 'company1',
+      };
+      expect(canAccessMessagesMenu(user)).toBe(true);
+    });
+
+    it('deve retornar true para admin', () => {
+      const user: User = {
+        uid: 'user2',
+        role: 'admin',
+        nome: 'Admin',
+        email: 'admin@test.com',
+        ativo: true,
+        companyId: 'company1',
+      };
+      expect(canAccessMessagesMenu(user)).toBe(true);
+    });
+
+    it('deve retornar true para profissional', () => {
+      const user: User = {
+        uid: 'user3',
+        role: 'pro',
+        nome: 'Profissional',
+        email: 'pro@test.com',
+        ativo: true,
+        companyId: 'company1',
+      };
+      expect(canAccessMessagesMenu(user)).toBe(true);
+    });
+
+    it('deve retornar true para atendente', () => {
+      const user: User = {
+        uid: 'user4',
+        role: 'atendente',
+        nome: 'Atendente',
+        email: 'atendente@test.com',
+        ativo: true,
+        companyId: 'company1',
+      };
+      expect(canAccessMessagesMenu(user)).toBe(true);
+    });
+
+    it('deve retornar true para outro com permissão menuMensagens', () => {
+      const user: User = {
+        uid: 'user5',
+        role: 'outro',
+        nome: 'Outro',
+        email: 'outro@test.com',
+        ativo: true,
+        companyId: 'company1',
+        permissions: {
+          agendaEdicao: false,
+          agendaVisualizacao: false,
+          financeiroDebitosPacientes: false,
+          financeiroApenasProprios: false,
+          financeiroAcessoCompleto: false,
+          menuAgenda: false,
+          menuProfissionais: false,
+          menuClientes: false,
+          menuServicos: false,
+          menuMensagens: true,
+        },
+      };
+      expect(canAccessMessagesMenu(user)).toBe(true);
+    });
+
+    it('deve retornar false para outro sem permissão menuMensagens', () => {
+      const user: User = {
+        uid: 'user6',
+        role: 'outro',
+        nome: 'Outro',
+        email: 'outro@test.com',
+        ativo: true,
+        companyId: 'company1',
+        permissions: {
+          agendaEdicao: false,
+          agendaVisualizacao: false,
+          financeiroDebitosPacientes: false,
+          financeiroApenasProprios: false,
+          financeiroAcessoCompleto: false,
+          menuAgenda: false,
+          menuProfissionais: false,
+          menuClientes: false,
+          menuServicos: false,
+          menuMensagens: false,
+        },
+      };
+      expect(canAccessMessagesMenu(user)).toBe(false);
+    });
+
+    it('deve retornar false para null', () => {
+      expect(canAccessMessagesMenu(null)).toBe(false);
     });
   });
 });

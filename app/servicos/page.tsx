@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { LoadingSpinner } from '@/components/ui/loading';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useServices, useCompanySettings, useCompany } from '@/hooks/useFirestore';
 import { Service } from '@/types';
 import { Plus, Package, Edit, Trash2, Clock, DollarSign, Percent, UserCheck, BarChart3, Gift, Tablet, Wand2, Upload, Check, X, Search, FileUp, Table, Power, PowerOff } from 'lucide-react';
@@ -743,26 +744,27 @@ export default function ServicesPage() {
 
           {/* Services Grid or Table */}
           {activeTab === 'list' ? (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className={cn(
-                'rounded-xl border overflow-hidden',
-                hasGradient 
-                  ? 'bg-white/80 border-white/25 backdrop-blur-xl shadow-xl' 
-                  : 'bg-white border-slate-200 shadow-lg'
-              )}
-            >
-              <div className="overflow-x-auto">
-                <table className="w-full">
+            <TooltipProvider>
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+                className={cn(
+                  'rounded-xl border overflow-hidden',
+                  hasGradient 
+                    ? 'bg-white/80 border-white/25 backdrop-blur-xl shadow-xl' 
+                    : 'bg-white border-slate-200 shadow-lg'
+                )}
+              >
+                <div className="overflow-x-auto">
+                  <table className="w-full">
                   <thead>
                     <tr className={cn(
                       'border-b',
                       hasGradient ? 'bg-white/50 border-white/25' : 'bg-slate-50 border-slate-200'
                     )}>
                       <th className={cn(
-                        'px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider',
+                        'px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider w-[200px] max-w-[200px]',
                         hasGradient ? 'text-slate-700' : 'text-slate-600'
                       )}>
                         Nome
@@ -836,11 +838,11 @@ export default function ServicesPage() {
                               : 'hover:bg-slate-50 border-b border-slate-200'
                           )}
                         >
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
                               <div
                                 className={cn(
-                                  'flex h-10 w-10 items-center justify-center rounded-lg text-white font-bold text-sm shadow-md',
+                                  'flex h-10 w-10 items-center justify-center rounded-lg text-white font-bold text-sm shadow-md flex-shrink-0',
                                   hasGradient
                                     ? isCustom && gradientColors
                                       ? ''
@@ -857,14 +859,19 @@ export default function ServicesPage() {
                               >
                                 <Package className="w-5 h-5" />
                               </div>
-                              <div>
-                                <div className={cn(
-                                  'text-sm font-semibold',
-                                  hasGradient ? 'text-slate-900' : 'text-gray-900'
-                                )}>
-                                  {service.nome}
-                                </div>
-                              </div>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <div className={cn(
+                                    'text-sm font-semibold truncate max-w-[200px] cursor-default',
+                                    hasGradient ? 'text-slate-900' : 'text-gray-900'
+                                  )}>
+                                    {service.nome}
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>{service.nome}</p>
+                                </TooltipContent>
+                              </Tooltip>
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -968,9 +975,10 @@ export default function ServicesPage() {
                       ))
                     )}
                   </tbody>
-                </table>
-              </div>
-            </motion.div>
+                  </table>
+                </div>
+              </motion.div>
+            </TooltipProvider>
           ) : (
             <motion.div
               initial={{ opacity: 0, y: 20 }}

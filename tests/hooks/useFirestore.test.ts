@@ -8,6 +8,7 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  setDoc,
   onSnapshot,
   query,
   where,
@@ -56,6 +57,7 @@ vi.mock('firebase/firestore', () => {
   const mockAddDoc = vi.fn();
   const mockUpdateDoc = vi.fn();
   const mockDeleteDoc = vi.fn();
+  const mockSetDoc = vi.fn();
   const mockOnSnapshot = vi.fn();
   const mockQuery = vi.fn();
   const mockWhere = vi.fn();
@@ -69,6 +71,7 @@ vi.mock('firebase/firestore', () => {
     addDoc: mockAddDoc,
     updateDoc: mockUpdateDoc,
     deleteDoc: mockDeleteDoc,
+    setDoc: mockSetDoc,
     onSnapshot: mockOnSnapshot,
     query: mockQuery,
     where: mockWhere,
@@ -267,8 +270,8 @@ describe('useFirestore Hooks', () => {
 
     it('deve buscar serviços do Firestore', async () => {
       const mockServices = [
-        { id: 'serv1', nome: 'Consulta', precoCentavos: 10000, duracaoMinutos: 30 },
-        { id: 'serv2', nome: 'Limpeza', precoCentavos: 5000, duracaoMinutos: 20 },
+        { id: 'serv1', nome: 'Consulta', precoCentavos: 10000, duracaoMin: 30, ativo: true },
+        { id: 'serv2', nome: 'Limpeza', precoCentavos: 5000, duracaoMin: 20, ativo: true },
       ];
 
       const mockUnsubscribe = vi.fn();
@@ -279,8 +282,22 @@ describe('useFirestore Hooks', () => {
         })),
       };
 
-      onSnapshot.mockImplementation((q, onNext) => {
-        onNext(mockSnapshot);
+      let callCount = 0;
+      onSnapshot.mockImplementation((ref, onNext) => {
+        callCount++;
+        // Primeira chamada: documento da empresa
+        if (callCount === 1) {
+          onNext({
+            exists: () => true,
+            data: () => ({
+              tipoEstabelecimento: 'clinica',
+            }),
+          });
+        }
+        // Segunda chamada: collection de serviços
+        else if (callCount === 2) {
+          onNext(mockSnapshot);
+        }
         return mockUnsubscribe;
       });
 
@@ -296,8 +313,22 @@ describe('useFirestore Hooks', () => {
 
     it('deve criar serviço', async () => {
       const mockUnsubscribe = vi.fn();
-      onSnapshot.mockImplementation((q, onNext) => {
-        onNext({ docs: [] });
+      let callCount = 0;
+      onSnapshot.mockImplementation((ref, onNext) => {
+        callCount++;
+        // Primeira chamada: documento da empresa
+        if (callCount === 1) {
+          onNext({
+            exists: () => true,
+            data: () => ({
+              tipoEstabelecimento: 'clinica',
+            }),
+          });
+        }
+        // Segunda chamada: collection de serviços
+        else if (callCount === 2) {
+          onNext({ docs: [] });
+        }
         return mockUnsubscribe;
       });
 
@@ -320,8 +351,22 @@ describe('useFirestore Hooks', () => {
 
     it('deve atualizar serviço', async () => {
       const mockUnsubscribe = vi.fn();
-      onSnapshot.mockImplementation((q, onNext) => {
-        onNext({ docs: [] });
+      let callCount = 0;
+      onSnapshot.mockImplementation((ref, onNext) => {
+        callCount++;
+        // Primeira chamada: documento da empresa
+        if (callCount === 1) {
+          onNext({
+            exists: () => true,
+            data: () => ({
+              tipoEstabelecimento: 'clinica',
+            }),
+          });
+        }
+        // Segunda chamada: collection de serviços
+        else if (callCount === 2) {
+          onNext({ docs: [] });
+        }
         return mockUnsubscribe;
       });
 
@@ -338,22 +383,88 @@ describe('useFirestore Hooks', () => {
       expect(updateDoc).toHaveBeenCalled();
     });
 
-    it('deve deletar serviço', async () => {
+    it('deve alternar status ativo/inativo do serviço', async () => {
       const mockUnsubscribe = vi.fn();
-      onSnapshot.mockImplementation((q, onNext) => {
-        onNext({ docs: [] });
+      const mockServiceDoc = {
+        id: 'serv1',
+        data: () => ({
+          nome: 'Serviço Teste',
+          duracaoMin: 60,
+          precoCentavos: 5000,
+          comissaoPercent: 10,
+          ativo: true,
+        }),
+        exists: () => true,
+      };
+
+      let callCount = 0;
+      // Mock onSnapshot - primeira chamada é para o documento da empresa, segunda para serviços
+      onSnapshot.mockImplementation((ref, onNext, onError) => {
+        callCount++;
+        // Primeira chamada: documento da empresa
+        if (callCount === 1) {
+          onNext({
+            exists: () => true,
+            data: () => ({
+              tipoEstabelecimento: 'clinica', // Não é dentista
+            }),
+          });
+        }
+        // Segunda chamada: collection de serviços (dentro do callback da empresa)
+        else if (callCount === 2) {
+          onNext({ docs: [mockServiceDoc] });
+        }
         return mockUnsubscribe;
+      });
+
+      // Mock doc para retornar objeto com path
+      doc.mockImplementation((db, ...pathSegments) => {
+        const path = pathSegments.join('/');
+        return {
+          path,
+          id: pathSegments[pathSegments.length - 1] || '',
+          parent: null,
+        };
+      });
+
+      // Mock getDoc para retornar o documento do serviço quando toggleServiceActive chamar
+      getDoc.mockImplementation((ref) => {
+        if (ref && typeof ref === 'object' && 'path' in ref) {
+          const path = ref.path;
+          if (path.includes('services/serv1')) {
+            return Promise.resolve({
+              exists: () => true,
+              data: () => ({
+                nome: 'Serviço Teste',
+                duracaoMin: 60,
+                precoCentavos: 5000,
+                comissaoPercent: 10,
+                ativo: true,
+              }),
+            });
+          }
+        }
+        return Promise.resolve({
+          exists: () => false,
+          data: () => ({}),
+        });
       });
 
       const { result } = renderHook(() => useServices('company1'));
 
       await waitFor(() => {
         expect(result.current.loading).toBe(false);
-      });
+      }, { timeout: 5000 });
 
-      await result.current.deleteService('serv1');
+      await result.current.toggleServiceActive('serv1');
 
-      expect(deleteDoc).toHaveBeenCalled();
+      // Verificar que updateDoc foi chamado (não deleteDoc)
+      expect(updateDoc).toHaveBeenCalled();
+      expect(deleteDoc).not.toHaveBeenCalled();
+      
+      // Verificar que o campo ativo foi alternado
+      const updateCall = updateDoc.mock.calls[updateDoc.mock.calls.length - 1];
+      expect(updateCall[1]).toHaveProperty('ativo', false);
     });
   });
 

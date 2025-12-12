@@ -64,3 +64,6 @@ Se o deploy falhar:
 3. Certifique-se de que o `firebase.json` está configurado corretamente
 4. Verifique se o build local funciona: `npm run build`
 
+
+
+

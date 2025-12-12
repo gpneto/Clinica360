@@ -139,6 +139,8 @@ vi.mock('lucide-react', () => {
     Search: createIcon('Search'),
     FileUp: createIcon('FileUp'),
     Table: createIcon('Table'),
+    PowerOff: createIcon('PowerOff'),
+    Power: createIcon('Power'),
   };
 });
 

@@ -647,6 +647,35 @@ export default function AjudaPage() {
                 </div>
               </div>
 
+              {/* Botão WhatsApp */}
+              <div className="mt-4">
+                <Button
+                  onClick={() => {
+                    const phoneNumber = '5551995279117'; // Formato: código país + código área + número
+                    const whatsappUrl = `https://wa.me/${phoneNumber}`;
+                    window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+                  }}
+                  className={cn(
+                    'w-full flex items-center justify-center gap-2',
+                    hasGradient
+                      ? isCustom && gradientColors
+                        ? 'text-white shadow-lg'
+                        : 'bg-gradient-to-r from-indigo-500 to-rose-500 text-white shadow-lg hover:opacity-90'
+                      : 'bg-green-500 text-white hover:bg-green-600'
+                  )}
+                  style={
+                    isCustom && gradientColors
+                      ? {
+                          background: `linear-gradient(90deg, ${gradientColors.start} 0%, ${gradientColors.middle} 50%, ${gradientColors.end} 100%)`,
+                        }
+                      : undefined
+                  }
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span>Falar com Suporte via WhatsApp</span>
+                </Button>
+              </div>
+
               {/* Search */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />

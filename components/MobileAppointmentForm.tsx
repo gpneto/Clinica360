@@ -220,6 +220,22 @@ export function MobileAppointmentForm({
   useEffect(() => {
     setFormData(buildInitialForm);
   }, [buildInitialForm, isOpen]);
+
+  // Adicionar/remover atributo no body quando o modal está aberto para ocultar o botão de IA
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      if (isOpen) {
+        document.body.setAttribute('data-appointment-modal-open', 'true');
+      } else {
+        document.body.removeAttribute('data-appointment-modal-open');
+      }
+    }
+    return () => {
+      if (typeof document !== 'undefined') {
+        document.body.removeAttribute('data-appointment-modal-open');
+      }
+    };
+  }, [isOpen]);
   useEffect(() => {
     if (
       formData.isBlock &&
@@ -622,8 +638,9 @@ export function MobileAppointmentForm({
         endTime: prev.isBlock ? (prev.endTime || endValue) : endValue,
         professionalId: prev.professionalId || selectedProfessional || (role === 'pro' ? professionalId || '' : '')
       }));
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }
-  }, [selectedDate, editingAppointment, isOpen, formData.duration, formData.isBlock, selectedProfessional, role, professionalId]);
+  }, [selectedDate, editingAppointment, isOpen, formData.isBlock, selectedProfessional, role, professionalId]);
 
   const steps = useMemo(() => {
     const base = [
@@ -779,10 +796,10 @@ export function MobileAppointmentForm({
           throw new Error(`Selecione ${singularLabel} e pelo menos um serviço válido.`);
         }
 
-        // Calcular duração total (soma de todos os serviços)
-        const totalDurationMinutes = selectedServices.reduce((sum, service) => {
+        // Usar duração selecionada pelo usuário, caso contrário calcular duração total (soma de todos os serviços)
+        const totalDurationMinutes = formData.duration || selectedServices.reduce((sum, service) => {
           return sum + (service.duracaoMin || 0);
-        }, 0) || formData.duration || 60;
+        }, 0) || 60;
         
         endDate = new Date(startDate.getTime() + totalDurationMinutes * 60000);
       }

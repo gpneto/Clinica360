@@ -5,6 +5,7 @@ import { format, startOfDay, endOfDay, isSameDay, getHours, getMinutes, parseISO
 import { ptBR } from 'date-fns/locale';
 import { useAuth } from '@/lib/auth-context';
 import { useAppointments, useProfessionals, useServices, usePatients, useCompany } from '@/hooks/useFirestore';
+import { hasFullFinancialAccess } from '@/lib/permissions';
 import { Appointment, Patient } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -36,7 +37,7 @@ import { cn, getGradientColors, getGradientStyle } from '@/lib/utils';
 import { useCustomerLabels } from '@/hooks/useCustomerLabels';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import moment from 'moment';
 
@@ -72,26 +73,7 @@ function AppointmentItem({
   onCompleteClick,
   getStatusBadge
 }: AppointmentItemProps) {
-  const [isPopoverOpen, setIsPopoverOpen] = useState(false);
-  const [popoverSide, setPopoverSide] = useState<'top' | 'bottom'>('top');
-  const triggerRef = useRef<HTMLDivElement>(null);
-  
-  useEffect(() => {
-    if (isPopoverOpen && triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect();
-      const viewportHeight = window.innerHeight;
-      const spaceAbove = rect.top;
-      const spaceBelow = viewportHeight - rect.bottom;
-      const popoverEstimatedHeight = 400; // Altura estimada do popover
-      
-      // Se não há espaço suficiente acima, mostrar embaixo
-      if (spaceAbove < popoverEstimatedHeight + 100) {
-        setPopoverSide('bottom');
-      } else {
-        setPopoverSide('top');
-      }
-    }
-  }, [isPopoverOpen]);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   
   const getAppointmentDate = (date: Date | string | undefined | null): Date => {
     if (!date) return new Date();
@@ -108,14 +90,13 @@ function AppointmentItem({
   const statusGradient = `linear-gradient(135deg, ${statusColor} 0%, ${statusColor}dd 100%)`;
 
   return (
-    <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
-      <PopoverTrigger asChild>
+    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <DialogTrigger asChild>
         <motion.div
-          ref={triggerRef}
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.2 }}
-                      className="flex items-center justify-between p-4 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer transition-all hover:shadow-sm"
+          className="flex items-center justify-between p-4 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer transition-all hover:shadow-sm"
         >
           <div className="flex items-center gap-4 flex-1">
             <div className="flex flex-col items-center justify-center p-2 rounded-lg min-w-[60px] bg-slate-100">
@@ -142,23 +123,14 @@ function AppointmentItem({
             </div>
           </div>
         </motion.div>
-      </PopoverTrigger>
+      </DialogTrigger>
       
-      <PopoverContent
-        side={popoverSide}
-        align="center"
-        sideOffset={12}
-        avoidCollisions={true}
-        collisionPadding={{ top: 100, bottom: 100, left: 16, right: 16 }}
-        className="w-[min(24rem,calc(100vw-32px))] max-h-[calc(100vh-160px)] overflow-y-auto p-0"
+      <DialogContent
+        className="max-w-2xl w-[calc(100vw-2rem)] max-h-[85vh] p-0 overflow-hidden flex flex-col bg-transparent border-0 shadow-none"
       >
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="bg-white rounded-xl shadow-lg overflow-hidden border border-slate-200"
-        >
+        <div className="bg-white rounded-xl overflow-hidden border border-slate-200 shadow-lg flex flex-col max-h-[85vh]">
           {/* Header com gradiente */}
-          <div className="relative">
+          <div className="relative flex-shrink-0">
             <div 
               className="h-2 w-full"
               style={{ background: statusGradient }}
@@ -166,9 +138,9 @@ function AppointmentItem({
             <div className="absolute top-0 left-0 right-0 h-2 bg-white/30" />
           </div>
           
-          <div className="p-3">
-            {/* Header com data e status */}
-            <div className="flex items-center justify-between mb-3">
+          {/* Header fixo */}
+          <div className="p-4 flex-shrink-0 border-b border-slate-200">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-purple-600 rounded-md flex items-center justify-center shadow-sm">
                   <Clock className="w-3 h-3 text-white" />
@@ -201,19 +173,13 @@ function AppointmentItem({
                    derivedStatus === 'pendente' ? 'Pendente' :
                    derivedStatus === 'no_show' ? 'Faltou' : 'Agendado'}
                 </Badge>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setIsPopoverOpen(false)}
-                  className="h-6 w-6 hover:bg-gray-100 rounded-full"
-                >
-                  <X className="w-3 h-3 text-gray-500" />
-                </Button>
               </div>
             </div>
+          </div>
 
-            {/* Informações principais */}
-            <div className="space-y-3">
+          {/* Área de conteúdo com scroll */}
+          <div className="flex-1 overflow-y-auto min-h-0">
+            <div className="p-4 space-y-3">
               {/* Serviço e Horário */}
               <div className="rounded-lg p-3 border border-slate-200 bg-slate-50">
                 <div className="flex items-center gap-2">
@@ -379,15 +345,17 @@ function AppointmentItem({
                 </div>
               )}
             </div>
+          </div>
 
-            {/* Ações */}
-            <div className="sticky bottom-0 left-0 right-0 mt-3 flex gap-2 border-t border-gray-200 bg-white pt-2">
+          {/* Ações fixas */}
+          <div className="flex-shrink-0 border-t border-gray-200 bg-white p-4">
+            <div className="flex gap-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => {
                   onViewAppointment?.(appointment);
-                  setIsPopoverOpen(false);
+                  setIsDialogOpen(false);
                 }}
                 className="flex-1 border-2 hover:bg-blue-50 hover:border-blue-300 transition-all duration-200"
               >
@@ -399,7 +367,7 @@ function AppointmentItem({
                   variant="default"
                   size="sm"
                   onClick={() => {
-                    setIsPopoverOpen(false);
+                    setIsDialogOpen(false);
                     onCompleteClick?.(appointment);
                   }}
                   className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
@@ -410,14 +378,14 @@ function AppointmentItem({
               )}
             </div>
           </div>
-        </motion.div>
-      </PopoverContent>
-    </Popover>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 export function Dashboard({ onViewAppointment, onCompleteClick }: DashboardProps) {
-  const { companyId, themePreference, customColor, customColor2, professionalId, role } = useAuth();
+  const { companyId, themePreference, customColor, customColor2, professionalId, role, userData, user } = useAuth();
   const [showMonetaryValues, setShowMonetaryValues] = useState(false);
   const isVibrant = themePreference === 'vibrant';
   const isCustom = themePreference === 'custom';
@@ -446,6 +414,14 @@ export function Dashboard({ onViewAppointment, onCompleteClick }: DashboardProps
   const { services, loading: servicesLoading } = useServices(companyId);
   const { patients, loading: patientsLoading } = usePatients(companyId);
   const { company, loading: companyLoading } = useCompany(companyId);
+
+  // Verificar se o usuário tem acesso financeiro
+  const userWithPermissions = userData && user ? {
+    uid: user.uid,
+    role: userData.role,
+    permissions: userData.permissions,
+  } : null;
+  const hasFinancialAccess = hasFullFinancialAccess(userWithPermissions) || role === 'owner' || role === 'admin';
 
   // Função auxiliar para converter datas
   const getAppointmentDate = (date: Date | string | undefined | null): Date => {
@@ -717,19 +693,21 @@ export function Dashboard({ onViewAppointment, onCompleteClick }: DashboardProps
               Bem-vindo de volta! Aqui está o resumo do seu dia.
             </p>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setShowMonetaryValues(!showMonetaryValues)}
-            className="text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-            title={showMonetaryValues ? 'Ocultar valores monetários' : 'Mostrar valores monetários'}
-          >
-            {showMonetaryValues ? (
-              <Eye className="h-5 w-5" />
-            ) : (
-              <EyeOff className="h-5 w-5" />
-            )}
-          </Button>
+          {hasFinancialAccess && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowMonetaryValues(!showMonetaryValues)}
+              className="text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+              title={showMonetaryValues ? 'Ocultar valores monetários' : 'Mostrar valores monetários'}
+            >
+              {showMonetaryValues ? (
+                <Eye className="h-5 w-5" />
+              ) : (
+                <EyeOff className="h-5 w-5" />
+              )}
+            </Button>
+          )}
         </div>
       </motion.div>
 
@@ -751,18 +729,20 @@ export function Dashboard({ onViewAppointment, onCompleteClick }: DashboardProps
           className={hasGradient ? 'has-gradient' : ''}
           style={undefined}
         />
-        <StatCard
-          title="Receita do Dia"
-          value={showMonetaryValues 
-            ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(todayStats.revenue)
-            : '•••'}
-          icon={DollarSign}
-          trend={showMonetaryValues 
-            ? `Média: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(generalStats.avgRevenue)}`
-            : '•••'}
-          className={hasGradient ? 'has-gradient' : ''}
-          style={undefined}
-        />
+        {hasFinancialAccess && (
+          <StatCard
+            title="Receita do Dia"
+            value={showMonetaryValues 
+              ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(todayStats.revenue)
+              : '•••'}
+            icon={DollarSign}
+            trend={showMonetaryValues 
+              ? `Média: ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(generalStats.avgRevenue)}`
+              : '•••'}
+            className={hasGradient ? 'has-gradient' : ''}
+            style={undefined}
+          />
+        )}
         <StatCard
           title="Aniversariantes"
           value={todayBirthdays.length}
@@ -927,24 +907,26 @@ export function Dashboard({ onViewAppointment, onCompleteClick }: DashboardProps
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, delay: 0.3 }}
       >
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="relative overflow-hidden bg-white shadow-sm border-slate-200">
-            <CardContent className="p-4 relative z-10">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium mb-1 text-slate-600">
-                    Receita (30 dias)
-                  </p>
-                  <p className="text-xl font-bold text-slate-900">
-                    {showMonetaryValues 
-                      ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(generalStats.totalRevenue)
-                      : '•••'}
-                  </p>
+        <div className={cn("grid gap-4", hasFinancialAccess ? "grid-cols-1 md:grid-cols-3" : "grid-cols-1 md:grid-cols-2")}>
+          {hasFinancialAccess && (
+            <Card className="relative overflow-hidden bg-white shadow-sm border-slate-200">
+              <CardContent className="p-4 relative z-10">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium mb-1 text-slate-600">
+                      Receita (30 dias)
+                    </p>
+                    <p className="text-xl font-bold text-slate-900">
+                      {showMonetaryValues 
+                        ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(generalStats.totalRevenue)
+                        : '•••'}
+                    </p>
+                  </div>
+                  <TrendingUp className="h-8 w-8 text-slate-400" />
                 </div>
-                <TrendingUp className="h-8 w-8 text-slate-400" />
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="relative overflow-hidden bg-white shadow-sm border-slate-200">
             <CardContent className="p-4 relative z-10">

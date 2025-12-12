@@ -14,10 +14,17 @@ import { useRouter } from 'next/navigation';
 
 // Mocks
 vi.mock('@/lib/auth-context');
-vi.mock('@/hooks/useFirestore');
+vi.mock('@/hooks/useFirestore', () => ({
+  usePatients: vi.fn(),
+  useCompany: vi.fn(() => ({
+    company: null,
+    loading: false,
+  })),
+}));
 vi.mock('next/navigation');
 vi.mock('@/lib/permissions', () => ({
   canAccessClientsMenu: vi.fn(() => true),
+  canAccessPatientDebits: vi.fn(() => true),
 }));
 vi.mock('@/components/AccessGuard', () => ({
   AccessGuard: ({ children }: any) => <div data-testid="access-guard">{children}</div>,
@@ -79,6 +86,13 @@ vi.mock('lucide-react', () => {
     X: createIcon('X'),
     AlertTriangle: createIcon('AlertTriangle'),
     Table: createIcon('Table'),
+    Stethoscope: createIcon('Stethoscope'),
+    History: createIcon('History'),
+    Wallet: createIcon('Wallet'),
+    DollarSign: createIcon('DollarSign'),
+    FileText: createIcon('FileText'),
+    CalendarClock: createIcon('CalendarClock'),
+    ChevronDown: createIcon('ChevronDown'),
   };
 });
 

@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth-context';
-import { Send, Loader2, Bot, User, X, Sparkles, RotateCcw, History, Download, Lightbulb, Calendar, BarChart3, MessageSquare, Briefcase, Trash2, Mic, MicOff } from 'lucide-react';
+import { Send, Loader2, Bot, User, X, RotateCcw, History, Download, Lightbulb, Calendar, BarChart3, MessageSquare, Briefcase, Trash2, Mic, MicOff } from 'lucide-react';
 import { cn, getGradientColors, getGradientStyle } from '@/lib/utils';
 import { createPortal } from 'react-dom';
 import { usePathname } from 'next/navigation';
@@ -199,31 +199,13 @@ export function FloatingAIAssistant() {
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
   const [isListening, setIsListening] = useState(false);
   const [recognition, setRecognition] = useState<any>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
-  
-  // Verificar se há modal aberto (como MobileAppointmentForm)
-  useEffect(() => {
-    const checkModalOpen = () => {
-      const hasModalOpen = document.body.hasAttribute('data-modal-open');
-      setIsModalOpen(hasModalOpen);
-    };
-    
-    // Verificar inicialmente
-    checkModalOpen();
-    
-    // Observar mudanças no atributo
-    const observer = new MutationObserver(checkModalOpen);
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ['data-modal-open']
-    });
-    
-    return () => observer.disconnect();
-  }, []);
+  const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const recognitionRef = useRef<any>(null);
 
   // Tema
   const isVibrant = themePreference === 'vibrant';
@@ -232,6 +214,28 @@ export function FloatingAIAssistant() {
   const hasGradient = isVibrant || isCustom;
   const gradientColors = isCustom && customColor ? getGradientColors('custom', customColor, customColor2) : null;
   const gradientStyleDiagonal = isCustom && customColor ? getGradientStyle('custom', customColor, '135deg', customColor2) : undefined;
+
+  // Verificar se o modal de agendamento está aberto
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    
+    const checkModalState = () => {
+      const isOpen = document.body.hasAttribute('data-appointment-modal-open');
+      setIsAppointmentModalOpen(isOpen);
+    };
+
+    // Verificar estado inicial
+    checkModalState();
+
+    // Observar mudanças no atributo
+    const observer = new MutationObserver(checkModalState);
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['data-appointment-modal-open']
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     setIsMounted(true);
@@ -249,6 +253,12 @@ export function FloatingAIAssistant() {
         recognitionInstance.lang = 'pt-BR';
         
         recognitionInstance.onresult = (event: any) => {
+          // Limpar timeout anterior quando detectar fala
+          if (silenceTimeoutRef.current) {
+            clearTimeout(silenceTimeoutRef.current);
+            silenceTimeoutRef.current = null;
+          }
+          
           // Pegar apenas resultados finais (não intermediários)
           const results = Array.from(event.results);
           const finalResults = results.filter((result: any) => result.isFinal);
@@ -258,7 +268,20 @@ export function FloatingAIAssistant() {
               .map((result: any) => result[0].transcript)
               .join('');
             setInput(prev => prev + (prev ? ' ' : '') + transcript);
-            // Não parar automaticamente - deixar o usuário decidir quando parar
+            
+            // Reiniciar timeout de silêncio (3 segundos sem fala)
+            silenceTimeoutRef.current = setTimeout(() => {
+              const currentRecognition = recognitionRef.current;
+              if (currentRecognition) {
+                try {
+                  currentRecognition.stop();
+                  setIsListening(false);
+                } catch (error) {
+                  console.error('Erro ao parar reconhecimento:', error);
+                  setIsListening(false);
+                }
+              }
+            }, 3000); // 3 segundos de silêncio
           }
         };
         
@@ -267,9 +290,23 @@ export function FloatingAIAssistant() {
           
           // Não mostrar alerta para alguns erros comuns
           if (event.error === 'no-speech') {
-            // Silenciosamente continuar se não detectar fala (não parar)
-            console.log('Nenhuma fala detectada, continuando...');
-            return; // Não parar o reconhecimento
+            // Se não detectar fala, iniciar timeout para parar após 3 segundos
+            if (silenceTimeoutRef.current) {
+              clearTimeout(silenceTimeoutRef.current);
+            }
+            silenceTimeoutRef.current = setTimeout(() => {
+              const currentRecognition = recognitionRef.current;
+              if (currentRecognition) {
+                try {
+                  currentRecognition.stop();
+                  setIsListening(false);
+                } catch (error) {
+                  console.error('Erro ao parar reconhecimento:', error);
+                  setIsListening(false);
+                }
+              }
+            }, 3000); // 3 segundos sem fala
+            return;
           } else if (event.error === 'not-allowed') {
             setIsListening(false);
             alert('Permissão de microfone negada. Por favor, permita o acesso ao microfone nas configurações do navegador e tente novamente.');
@@ -290,32 +327,51 @@ export function FloatingAIAssistant() {
         };
         
         recognitionInstance.onend = () => {
-          // Usar uma função de callback para acessar o estado atual
-          setIsListening((current) => {
-            // Se ainda está marcado como listening, reiniciar automaticamente
-            // Isso mantém o reconhecimento ativo até o usuário parar manualmente
-            if (current) {
-              setTimeout(() => {
-                try {
-                  recognitionInstance.start();
-                } catch (error) {
-                  // Se não conseguir reiniciar, retornar false para parar
-                  return false;
-                }
-              }, 100);
-            }
-            return current;
-          });
+          // Limpar timeout quando o reconhecimento terminar
+          if (silenceTimeoutRef.current) {
+            clearTimeout(silenceTimeoutRef.current);
+            silenceTimeoutRef.current = null;
+          }
+          
+          // Não reiniciar automaticamente - deixar o usuário decidir quando continuar
+          setIsListening(false);
         };
         
         recognitionInstance.onstart = () => {
           console.log('Reconhecimento de voz iniciado');
           setIsListening(true);
+          
+          // Iniciar timeout de silêncio quando começar a ouvir
+          // Se não detectar fala em 5 segundos, parar automaticamente
+          if (silenceTimeoutRef.current) {
+            clearTimeout(silenceTimeoutRef.current);
+          }
+          silenceTimeoutRef.current = setTimeout(() => {
+            const currentRecognition = recognitionRef.current;
+            if (currentRecognition) {
+              try {
+                currentRecognition.stop();
+                setIsListening(false);
+              } catch (error) {
+                console.error('Erro ao parar reconhecimento por silêncio:', error);
+                setIsListening(false);
+              }
+            }
+          }, 2000); // 5 segundos sem fala inicial
         };
         
+        recognitionRef.current = recognitionInstance;
         setRecognition(recognitionInstance);
       }
     }
+    
+    // Cleanup: limpar timeout quando componente desmontar
+    return () => {
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
+      }
+    };
   }, [companyId]);
 
   // Scroll para o final das mensagens
@@ -438,24 +494,9 @@ export function FloatingAIAssistant() {
       }
     } catch (error: any) {
       console.error('Erro ao chamar IA:', error);
-      
-      // Extrair mensagem de erro do Firebase Functions
-      let errorMessageText = 'Erro desconhecido';
-      
-      if (error.code === 'permission-denied') {
-        // Erro de permissão - usar a mensagem específica
-        errorMessageText = error.message || 'Você não tem permissão para executar esta ação.';
-      } else if (error.message) {
-        // Outros erros - usar a mensagem do erro
-        errorMessageText = error.message;
-      } else if (error.details) {
-        // Tentar extrair de details se disponível
-        errorMessageText = typeof error.details === 'string' ? error.details : JSON.stringify(error.details);
-      }
-      
       const errorMessage: Message = {
         role: 'assistant',
-        content: errorMessageText,
+        content: `Desculpe, ocorreu um erro: ${error.message || 'Erro desconhecido'}. Por favor, tente novamente.`,
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
@@ -509,25 +550,9 @@ export function FloatingAIAssistant() {
         setSavedConversations(loadSavedConversations(companyId));
       }
     } catch (error: any) {
-      console.error('Erro ao chamar IA:', error);
-      
-      // Extrair mensagem de erro do Firebase Functions
-      let errorMessageText = 'Erro desconhecido';
-      
-      if (error.code === 'permission-denied') {
-        // Erro de permissão - usar a mensagem específica
-        errorMessageText = error.message || 'Você não tem permissão para executar esta ação.';
-      } else if (error.message) {
-        // Outros erros - usar a mensagem do erro
-        errorMessageText = error.message;
-      } else if (error.details) {
-        // Tentar extrair de details se disponível
-        errorMessageText = typeof error.details === 'string' ? error.details : JSON.stringify(error.details);
-      }
-      
       const errorMessage: Message = {
         role: 'assistant',
-        content: errorMessageText,
+        content: `Erro: ${error.message || 'Erro desconhecido'}.`,
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
@@ -652,6 +677,11 @@ export function FloatingAIAssistant() {
     }
 
     if (isListening) {
+      // Limpar timeout se estiver ativo
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
+      }
       try {
         recognition.stop();
         setIsListening(false);
@@ -660,6 +690,11 @@ export function FloatingAIAssistant() {
         setIsListening(false);
       }
     } else {
+      // Limpar qualquer timeout anterior
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
+      }
       // Solicitar permissão primeiro (especialmente importante no mobile)
       const hasPermission = await requestMicrophonePermission();
       if (!hasPermission) {
@@ -721,11 +756,32 @@ export function FloatingAIAssistant() {
     }
   };
 
+  const handleCloseModal = () => {
+    // Limpar timeout se estiver ativo
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current);
+      silenceTimeoutRef.current = null;
+    }
+    
+    // Parar reconhecimento se estiver ativo
+    if (isListening && recognition) {
+      try {
+        recognition.stop();
+        setIsListening(false);
+      } catch (error) {
+        console.error('Erro ao parar reconhecimento ao fechar modal:', error);
+        setIsListening(false);
+      }
+    }
+    
+    setIsOpen(false);
+  };
+
   const showInitialSuggestions = messages.length === 1 && messages[0].role === 'assistant';
 
   if (!user || !companyId || !isMounted) return null;
   if (
-    pathname === '/signin' ||
+    pathname === '/home' ||
     pathname === '/contexto' ||
     pathname === '/setup' ||
     pathname?.startsWith('/assinatura-orcamento') ||
@@ -737,7 +793,7 @@ export function FloatingAIAssistant() {
   return (
     <>
       {/* Botão Flutuante */}
-      {!isMessagesPage && !isModalOpen && (
+      {!isMessagesPage && !isAppointmentModalOpen && (
         <motion.button
           onClick={() => setIsOpen(true)}
           className={cn(
@@ -756,11 +812,10 @@ export function FloatingAIAssistant() {
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.95 }}
           initial={{ scale: 0 }}
-          animate={{ scale: isModalOpen ? 0 : 1 }}
-          exit={{ scale: 0 }}
+          animate={{ scale: 1 }}
           transition={{ type: 'spring', damping: 15, stiffness: 300 }}
         >
-          <Sparkles className="w-6 h-6" />
+          <MessageSquare className="w-6 h-6" />
         </motion.button>
       )}
 
@@ -794,7 +849,7 @@ export function FloatingAIAssistant() {
                     paddingLeft: 'env(safe-area-inset-left)',
                     paddingRight: 'env(safe-area-inset-right)',
                   }}
-                  onClick={() => setIsOpen(false)}
+                  onClick={handleCloseModal}
                   onTouchMove={(e) => {
                     // Prevenir qualquer scroll no overlay
                     e.preventDefault();
@@ -825,13 +880,13 @@ export function FloatingAIAssistant() {
                   )}
                   style={{
                     // Mobile: garantir que ocupa toda a tela respeitando safe-area
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    width: '100vw',
-                    height: '100dvh', // Usar dvh para considerar safe-area
-                    maxHeight: '100dvh',
+                    top: typeof window !== 'undefined' && window.innerWidth < 640 ? 0 : 'auto',
+                    left: typeof window !== 'undefined' && window.innerWidth < 640 ? 0 : 'auto',
+                    right: typeof window !== 'undefined' && window.innerWidth < 640 ? 0 : '24px',
+                    bottom: typeof window !== 'undefined' && window.innerWidth < 640 ? 0 : '24px',
+                    width: typeof window !== 'undefined' && window.innerWidth < 640 ? '100vw' : '420px',
+                    height: typeof window !== 'undefined' && window.innerWidth < 640 ? '100dvh' : 'min(700px, calc(100vh - 48px))',
+                    maxHeight: typeof window !== 'undefined' && window.innerWidth < 640 ? '100dvh' : 'min(700px, calc(100vh - 48px))',
                     position: 'fixed',
                     // Safe area insets para mobile
                     paddingTop: typeof window !== 'undefined' && window.innerWidth < 640 
@@ -846,26 +901,13 @@ export function FloatingAIAssistant() {
                     paddingRight: typeof window !== 'undefined' && window.innerWidth < 640 
                       ? 'env(safe-area-inset-right)' 
                       : 0,
-                    // Desktop: resetar para tamanho fixo
-                    ...(typeof window !== 'undefined' && window.innerWidth >= 640 ? {
-                      width: '420px',
-                      height: '700px',
-                      maxHeight: '700px',
-                      top: 'auto',
-                      left: 'auto',
-                      right: '24px',
-                      bottom: '24px',
-                      paddingTop: 0,
-                      paddingBottom: 0,
-                      paddingLeft: 0,
-                      paddingRight: 0,
-                    } : {}),
+                
                   }}
                   onClick={(e) => e.stopPropagation()}
                 >
                   {/* Header */}
                   <div className={cn(
-                    'flex items-center justify-between p-4 border-b flex-shrink-0',
+                    'flex items-center justify-between p-4 border-b flex-shrink-0 z-10 relative',
                     hasGradient ? 'border-white/20 bg-white/40' : 'border-gray-200 bg-gray-50'
                   )}>
                     <div className="flex items-center gap-3">
@@ -917,7 +959,7 @@ export function FloatingAIAssistant() {
                         <RotateCcw className="w-5 h-5 text-gray-600" />
                       </button>
                       <button
-                        onClick={() => setIsOpen(false)}
+                        onClick={handleCloseModal}
                         className={cn(
                           'p-2 rounded-lg transition-colors',
                           hasGradient ? 'hover:bg-white/60' : 'hover:bg-gray-100'

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { motion } from 'framer-motion';
-import { Users, UserPlus, Edit, Shield, UserCheck, UserX, X, Settings } from 'lucide-react';
+import { Users, UserPlus, Edit, Shield, UserCheck, UserX, X, Settings, Info } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { doc, updateDoc, collection, query, orderBy, onSnapshot, addDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -16,6 +16,7 @@ import toast from 'react-hot-toast';
 import { cn, getGradientColors, getGradientStyle } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { PermissionsModal } from '@/components/PermissionsModal';
+import { ProfilesInfoModal } from '@/components/ProfilesInfoModal';
 import { GranularPermissions } from '@/types';
 import { createDefaultPermissions } from '@/lib/permissions';
 
@@ -52,6 +53,7 @@ export default function UsuariosPage() {
   const [newUserForm, setNewUserForm] = useState<NewUserForm>(() => createEmptyUser());
   const [permissionsModalOpen, setPermissionsModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [profilesInfoModalOpen, setProfilesInfoModalOpen] = useState(false);
   const isVibrant = themePreference === 'vibrant';
   const isNeutral = themePreference === 'neutral';
   const isCustom = themePreference === 'custom';
@@ -368,25 +370,45 @@ export default function UsuariosPage() {
                   Acompanhe permissões e status da equipe
                 </p>
               </div>
-              <Button
-                onClick={handleOpenCreateModal}
-                className={cn(
-                  'flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold shadow-lg transition-all duration-300',
-                  hasGradient
-                    ? isCustom && gradientStyleHorizontal
-                      ? 'text-white hover:opacity-90'
-                      : isVibrant
-                      ? 'bg-gradient-to-r from-indigo-500 via-purple-500 to-rose-500 text-white hover:from-indigo-600 hover:via-purple-600 hover:to-rose-600'
-                      : 'bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700'
-                    : isNeutral
-                    ? 'bg-gradient-to-r from-slate-700 to-slate-800 text-white hover:from-slate-800 hover:to-slate-900'
-                    : 'bg-slate-900 text-white hover:bg-slate-800'
-                )}
-                style={isCustom && gradientStyleHorizontal ? gradientStyleHorizontal : undefined}
-              >
-                <UserPlus className="w-4 h-4" />
-                Novo usuário
-              </Button>
+              <div className="flex items-center gap-3">
+                <Button
+                  onClick={() => setProfilesInfoModalOpen(true)}
+                  className={cn(
+                    'flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold shadow-lg transition-all duration-300',
+                    hasGradient
+                      ? isCustom && gradientStyleHorizontal
+                        ? 'bg-white/90 backdrop-blur-sm text-slate-800 border-2 border-white hover:bg-white hover:shadow-xl'
+                        : isVibrant
+                        ? 'bg-white/90 backdrop-blur-sm text-slate-800 border-2 border-white hover:bg-white hover:shadow-xl'
+                        : 'bg-white/90 backdrop-blur-sm text-slate-800 border-2 border-white hover:bg-white hover:shadow-xl'
+                      : isNeutral
+                      ? 'bg-blue-100 text-blue-800 border-2 border-blue-400 hover:bg-blue-200 hover:border-blue-500 hover:shadow-xl font-bold'
+                      : 'bg-blue-500 text-white border-2 border-blue-600 hover:bg-blue-600 hover:border-blue-700 hover:shadow-xl font-bold'
+                  )}
+                >
+                  <Info className="w-4 h-4" />
+                  Sobre os perfis
+                </Button>
+                <Button
+                  onClick={handleOpenCreateModal}
+                  className={cn(
+                    'flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold shadow-lg transition-all duration-300',
+                    hasGradient
+                      ? isCustom && gradientStyleHorizontal
+                        ? 'text-white hover:opacity-90'
+                        : isVibrant
+                        ? 'bg-gradient-to-r from-indigo-500 via-purple-500 to-rose-500 text-white hover:from-indigo-600 hover:via-purple-600 hover:to-rose-600'
+                        : 'bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700'
+                      : isNeutral
+                      ? 'bg-gradient-to-r from-slate-700 to-slate-800 text-white hover:from-slate-800 hover:to-slate-900'
+                      : 'bg-slate-900 text-white hover:bg-slate-800'
+                  )}
+                  style={isCustom && gradientStyleHorizontal ? gradientStyleHorizontal : undefined}
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Novo usuário
+                </Button>
+              </div>
             </div>
           </motion.div>
 
@@ -963,6 +985,13 @@ export default function UsuariosPage() {
             userName={selectedUser.nome}
           />
         )}
+
+        {/* Modal de Informações sobre Perfis */}
+        <ProfilesInfoModal
+          open={profilesInfoModalOpen}
+          onOpenChange={setProfilesInfoModalOpen}
+          themePreference={themePreference}
+        />
       </div>
     </AccessGuard>
   );

@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Calendar,
   Mail,
   Lock,
   User as UserIcon,
@@ -253,29 +252,42 @@ export default function LoginPage() {
   // Mostrar loading enquanto verifica autenticação
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900"></div>
+      <div className="min-h-screen flex items-center justify-center" style={{
+        background: '#f0f9f0',
+        backgroundImage: 'radial-gradient(circle, rgba(137, 191, 71, 0.12) 1px, transparent 1px)',
+        backgroundSize: '24px 24px'
+      }}>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: '#89bf47', borderTopColor: 'transparent' }}></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50 flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4" style={{
+      background: '#f0f9f0',
+      backgroundImage: 'radial-gradient(circle, rgba(137, 191, 71, 0.12) 1px, transparent 1px)',
+      backgroundSize: '24px 24px'
+    }}>
       <div className="w-full max-w-md">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="bg-white rounded-2xl shadow-xl border border-slate-200 p-8"
+          className="bg-white rounded-2xl shadow-xl border-2 p-8"
+          style={{ borderColor: 'rgba(137, 191, 71, 0.3)' }}
         >
           <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-gradient-to-br from-slate-700 to-slate-900 rounded-xl flex items-center justify-center mx-auto mb-4">
-              <Calendar className="w-8 h-8 text-white" />
+            <div className="w-16 h-16 rounded-xl flex items-center justify-center mx-auto mb-4 overflow-hidden" style={{ background: '#89bf47' }}>
+              <img 
+                src="/logo-texai.png" 
+                alt="TexAi Logo" 
+                className="w-full h-full object-contain"
+              />
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 mb-2">
+            <h1 className="text-2xl font-bold mb-2" style={{ color: '#1f2937' }}>
               {authMode === 'login' ? 'Bem-vindo de volta' : 'Crie sua conta'}
             </h1>
-            <p className="text-slate-600">
+            <p className="text-gray-600">
               {authMode === 'login' ? 'Faça login para acessar sua conta' : 'Comece seu teste hoje mesmo'}
             </p>
           </div>
@@ -283,7 +295,19 @@ export default function LoginPage() {
           <Button
             onClick={handleLogin}
             disabled={loading}
-            className="w-full h-12 text-base font-semibold bg-white border-2 border-slate-300 text-slate-700 hover:bg-slate-50 rounded-xl shadow-sm mb-4"
+            className="w-full h-12 text-base font-semibold bg-white border-2 rounded-xl shadow-sm mb-4"
+            style={{ 
+              borderColor: 'rgba(137, 191, 71, 0.3)',
+              color: '#374151'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'rgba(137, 191, 71, 0.05)';
+              e.currentTarget.style.borderColor = 'rgba(137, 191, 71, 0.5)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'white';
+              e.currentTarget.style.borderColor = 'rgba(137, 191, 71, 0.3)';
+            }}
             size="lg"
           >
             <AnimatePresence mode="wait">
@@ -332,20 +356,34 @@ export default function LoginPage() {
 
           <div className="relative mb-6">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-300"></div>
+              <div className="w-full border-t" style={{ borderColor: 'rgba(137, 191, 71, 0.3)' }}></div>
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white text-slate-500">ou</span>
+              <span className="px-2 bg-white" style={{ color: '#6b7280' }}>ou</span>
             </div>
           </div>
 
-          <div className="flex items-center justify-between mb-4 bg-slate-50 rounded-lg p-1">
+          <div className="flex items-center justify-between mb-4 rounded-lg p-1" style={{ background: 'rgba(137, 191, 71, 0.1)' }}>
             <button
               className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${
                 authMode === 'login'
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white shadow-sm'
+                  : ''
               }`}
+              style={authMode === 'login' 
+                ? { color: '#1f2937' }
+                : { color: '#6b7280' }
+              }
+              onMouseEnter={(e) => {
+                if (authMode !== 'login') {
+                  e.currentTarget.style.color = '#1f2937';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (authMode !== 'login') {
+                  e.currentTarget.style.color = '#6b7280';
+                }
+              }}
               onClick={() => setAuthMode('login')}
               type="button"
             >
@@ -354,9 +392,23 @@ export default function LoginPage() {
             <button
               className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${
                 authMode === 'register'
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white shadow-sm'
+                  : ''
               }`}
+              style={authMode === 'register' 
+                ? { color: '#1f2937' }
+                : { color: '#6b7280' }
+              }
+              onMouseEnter={(e) => {
+                if (authMode !== 'register') {
+                  e.currentTarget.style.color = '#1f2937';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (authMode !== 'register') {
+                  e.currentTarget.style.color = '#6b7280';
+                }
+              }}
               onClick={() => setAuthMode('register')}
               type="button"
             >
@@ -367,40 +419,76 @@ export default function LoginPage() {
           <form onSubmit={handleEmailAuth} className="space-y-4">
             {authMode === 'register' && (
               <div className="relative">
-                <UserIcon className="absolute left-3 top-3.5 w-5 h-5 text-slate-400" />
+                <UserIcon className="absolute left-3 top-3.5 w-5 h-5" style={{ color: '#89bf47' }} />
                 <Input
                   placeholder="Seu nome completo"
                   value={nome}
                   onChange={(event) => setNome(event.target.value)}
-                  className="pl-11 h-12 border-slate-300 focus:border-slate-500 focus:ring-slate-500"
+                  className="pl-11 h-12"
+                  style={{ 
+                    borderColor: 'rgba(137, 191, 71, 0.3)',
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#89bf47';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(137, 191, 71, 0.1)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = 'rgba(137, 191, 71, 0.3)';
+                    e.target.style.boxShadow = 'none';
+                  }}
                 />
               </div>
             )}
             <div className="relative">
-              <Mail className="absolute left-3 top-3.5 w-5 h-5 text-slate-400" />
+              <Mail className="absolute left-3 top-3.5 w-5 h-5" style={{ color: '#89bf47' }} />
               <Input
                 type="email"
                 placeholder="seu@email.com"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 required
-                className="pl-11 h-12 border-slate-300 focus:border-slate-500 focus:ring-slate-500"
+                className="pl-11 h-12"
+                style={{ 
+                  borderColor: 'rgba(137, 191, 71, 0.3)',
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = '#89bf47';
+                  e.target.style.boxShadow = '0 0 0 3px rgba(137, 191, 71, 0.1)';
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = 'rgba(137, 191, 71, 0.3)';
+                  e.target.style.boxShadow = 'none';
+                }}
               />
             </div>
             <div className="relative">
-              <Lock className="absolute left-3 top-3.5 w-5 h-5 text-slate-400" />
+              <Lock className="absolute left-3 top-3.5 w-5 h-5" style={{ color: '#89bf47' }} />
               <Input
                 type={showPassword ? 'text' : 'password'}
                 placeholder="Sua senha"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 required
-                className="pl-11 pr-11 h-12 border-slate-300 focus:border-slate-500 focus:ring-slate-500"
+                className="pl-11 pr-11 h-12"
+                style={{ 
+                  borderColor: 'rgba(137, 191, 71, 0.3)',
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = '#89bf47';
+                  e.target.style.boxShadow = '0 0 0 3px rgba(137, 191, 71, 0.1)';
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = 'rgba(137, 191, 71, 0.3)';
+                  e.target.style.boxShadow = 'none';
+                }}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-3.5 text-slate-400 hover:text-slate-600 transition-colors"
+                className="absolute right-3 top-3.5 transition-colors"
+                style={{ color: '#89bf47' }}
+                onMouseEnter={(e) => e.currentTarget.style.color = '#7aad3f'}
+                onMouseLeave={(e) => e.currentTarget.style.color = '#89bf47'}
                 aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
               >
                 {showPassword ? (
@@ -418,7 +506,10 @@ export default function LoginPage() {
                     setResetEmail(email);
                     setShowResetPasswordModal(true);
                   }}
-                  className="text-sm text-slate-600 hover:text-slate-900 hover:underline transition-colors"
+                  className="text-sm transition-colors"
+                  style={{ color: '#89bf47' }}
+                  onMouseEnter={(e) => e.currentTarget.style.color = '#7aad3f'}
+                  onMouseLeave={(e) => e.currentTarget.style.color = '#89bf47'}
                 >
                   Esqueci minha senha
                 </button>
@@ -427,15 +518,35 @@ export default function LoginPage() {
             <Button
               type="submit"
               disabled={emailLoading}
-              className="w-full h-12 text-base font-semibold bg-slate-900 text-white hover:bg-slate-800 rounded-xl shadow-lg"
+              className="w-full h-12 text-base font-semibold text-white rounded-xl shadow-lg"
+              style={{ 
+                background: '#89bf47',
+                borderColor: '#89bf47'
+              }}
+              onMouseEnter={(e) => {
+                if (!emailLoading) {
+                  e.currentTarget.style.backgroundColor = '#7aad3f';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!emailLoading) {
+                  e.currentTarget.style.backgroundColor = '#89bf47';
+                }
+              }}
             >
               {emailLoading ? 'Processando...' : authMode === 'login' ? 'Entrar' : 'Começar teste'}
             </Button>
           </form>
 
-          <p className="mt-6 text-xs text-slate-500 text-center leading-relaxed">
+          <p className="mt-6 text-xs text-center leading-relaxed" style={{ color: '#6b7280' }}>
             Ao continuar, você concorda com nossa{' '}
-            <a href="/politica-de-privacidade" className="text-slate-700 hover:text-slate-900 underline font-medium">
+            <a 
+              href="/politica-de-privacidade" 
+              className="underline font-medium transition-colors"
+              style={{ color: '#89bf47' }}
+              onMouseEnter={(e) => e.currentTarget.style.color = '#7aad3f'}
+              onMouseLeave={(e) => e.currentTarget.style.color = '#89bf47'}
+            >
               Política de Privacidade
             </a>
             .
@@ -458,33 +569,48 @@ export default function LoginPage() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full"
+              className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full border-2"
+              style={{ borderColor: 'rgba(137, 191, 71, 0.3)' }}
             >
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-2xl font-bold text-slate-900">Recuperar senha</h3>
+                <h3 className="text-2xl font-bold" style={{ color: '#1f2937' }}>Recuperar senha</h3>
                 <button
                   onClick={() => setShowResetPasswordModal(false)}
-                  className="text-slate-400 hover:text-slate-600 transition-colors"
+                  className="transition-colors"
+                  style={{ color: '#9ca3af' }}
+                  onMouseEnter={(e) => e.currentTarget.style.color = '#89bf47'}
+                  onMouseLeave={(e) => e.currentTarget.style.color = '#9ca3af'}
                   aria-label="Fechar"
                 >
                   <X className="w-6 h-6" />
                 </button>
               </div>
               
-              <p className="text-slate-600 mb-6">
+              <p className="mb-6" style={{ color: '#6b7280' }}>
                 Digite seu email e enviaremos um link para você redefinir sua senha.
               </p>
 
               <form onSubmit={handleResetPassword} className="space-y-4">
                 <div className="relative">
-                  <Mail className="absolute left-3 top-3.5 w-5 h-5 text-slate-400" />
+                  <Mail className="absolute left-3 top-3.5 w-5 h-5" style={{ color: '#89bf47' }} />
                   <Input
                     type="email"
                     placeholder="seu@email.com"
                     value={resetEmail}
                     onChange={(event) => setResetEmail(event.target.value)}
                     required
-                    className="pl-11 h-12 border-slate-300 focus:border-slate-500 focus:ring-slate-500"
+                    className="pl-11 h-12"
+                    style={{ 
+                      borderColor: 'rgba(137, 191, 71, 0.3)',
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.borderColor = '#89bf47';
+                      e.target.style.boxShadow = '0 0 0 3px rgba(137, 191, 71, 0.1)';
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = 'rgba(137, 191, 71, 0.3)';
+                      e.target.style.boxShadow = 'none';
+                    }}
                     autoFocus
                   />
                 </div>
@@ -494,14 +620,40 @@ export default function LoginPage() {
                     type="button"
                     variant="outline"
                     onClick={() => setShowResetPasswordModal(false)}
-                    className="flex-1 h-12 border-slate-300 text-slate-700 hover:bg-slate-50"
+                    className="flex-1 h-12"
+                    style={{ 
+                      borderColor: 'rgba(137, 191, 71, 0.3)',
+                      color: '#374151'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(137, 191, 71, 0.05)';
+                      e.currentTarget.style.borderColor = 'rgba(137, 191, 71, 0.5)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                      e.currentTarget.style.borderColor = 'rgba(137, 191, 71, 0.3)';
+                    }}
                   >
                     Cancelar
                   </Button>
                   <Button
                     type="submit"
                     disabled={resetLoading}
-                    className="flex-1 h-12 bg-slate-900 text-white hover:bg-slate-800"
+                    className="flex-1 h-12 text-white"
+                    style={{ 
+                      background: '#89bf47',
+                      borderColor: '#89bf47'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!resetLoading) {
+                        e.currentTarget.style.backgroundColor = '#7aad3f';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!resetLoading) {
+                        e.currentTarget.style.backgroundColor = '#89bf47';
+                      }
+                    }}
                   >
                     {resetLoading ? 'Enviando...' : 'Enviar'}
                   </Button>
@@ -514,4 +666,7 @@ export default function LoginPage() {
     </div>
   );
 }
+
+
+
 

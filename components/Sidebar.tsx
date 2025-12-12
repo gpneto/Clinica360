@@ -34,10 +34,15 @@ import { logout } from '@/lib/firebase';
 import { useCompany } from '@/hooks/useFirestore';
 import { cn, getGradientColors, getGradientStyle } from '@/lib/utils';
 import { useCustomerLabels } from '@/hooks/useCustomerLabels';
+// Usando img ao invés de Image para compatibilidade com output: 'export'
 import {
   canAccessProfessionalsMenu,
   canViewAllAgendas,
   hasFullFinancialAccess,
+  canAccessServicesMenu,
+  canAccessClientsMenu,
+  canAccessMessagesMenu,
+  canAccessAgendaMenu,
 } from '@/lib/permissions';
 
 interface NavigationItem {
@@ -65,9 +70,9 @@ const navigation: NavigationItem[] = [
     icon: Calendar, 
     roles: ['owner', 'admin', 'pro', 'atendente', 'outro'],
     checkPermission: (user) => {
-      // Para tipo 'outro', verificar se tem permissão de visualização ou edição
+      // Para tipo 'outro', verificar permissão granular
       if (user?.role === 'outro') {
-        return user?.permissions?.agendaVisualizacao || user?.permissions?.agendaEdicao || false;
+        return canAccessAgendaMenu(user);
       }
       return true; // Para outros roles, sempre permitir
     }
@@ -76,13 +81,27 @@ const navigation: NavigationItem[] = [
     name: 'Pacientes', 
     href: '/pacientes', 
     icon: HeartPulse, 
-    roles: ['owner', 'admin', 'pro', 'atendente', 'outro']
+    roles: ['owner', 'admin', 'pro', 'atendente', 'outro'],
+    checkPermission: (user) => {
+      // Para tipo 'outro', verificar permissão granular
+      if (user?.role === 'outro') {
+        return canAccessClientsMenu(user);
+      }
+      return true; // Para outros roles, sempre permitir
+    }
   },
   { 
     name: 'Mensagens', 
     href: '/mensagens', 
     icon: MessageCircle, 
-    roles: ['owner', 'admin', 'atendente', 'outro']
+    roles: ['owner', 'admin', 'atendente', 'outro'],
+    checkPermission: (user) => {
+      // Para tipo 'outro', verificar permissão granular
+      if (user?.role === 'outro') {
+        return canAccessMessagesMenu(user);
+      }
+      return true; // Para outros roles, sempre permitir
+    }
   },
   { 
     name: 'Relatórios', 
@@ -94,7 +113,7 @@ const navigation: NavigationItem[] = [
   { 
     name: 'Configurações', 
     icon: Settings, 
-    roles: ['owner', 'admin'],
+    roles: ['owner', 'admin', 'pro', 'atendente', 'outro'],
     submenu: [
       {
         name: 'Geral',
@@ -113,7 +132,14 @@ const navigation: NavigationItem[] = [
         name: 'Serviços', 
         href: '/servicos', 
         icon: Package, 
-        roles: ['owner', 'admin', 'pro', 'atendente', 'outro']
+        roles: ['owner', 'admin', 'pro', 'atendente', 'outro'],
+        checkPermission: (user) => {
+          // Para tipo 'outro', verificar permissão granular
+          if (user?.role === 'outro') {
+            return canAccessServicesMenu(user);
+          }
+          return true; // Para outros roles, sempre permitir
+        }
       },
       { name: 'Usuários', href: '/usuarios', icon: Users, roles: ['owner', 'admin'] },
       { name: 'Modelos de anamnese', href: '/configuracoes/modelos-anamnese', icon: FileText, roles: ['owner', 'admin'] },
@@ -192,7 +218,7 @@ export function Sidebar() {
     try {
       await logout();
       // Redirecionar para a página de login após logout
-      window.location.href = '/signin';
+      window.location.href = '/home';
     } catch (error) {
       console.error('Erro no logout:', error);
     }
@@ -331,7 +357,7 @@ export function Sidebar() {
   }, [pathname]);
 
   // Não mostrar sidebar na página de login
-  if (pathname === '/signin') {
+  if (pathname === '/home') {
     return null;
   }
 
@@ -407,7 +433,7 @@ export function Sidebar() {
               ) : (
                 <div
                   className={cn(
-                    'flex h-12 w-12 items-center justify-center rounded-xl text-white shadow-sm',
+                    'flex h-12 w-12 items-center justify-center rounded-xl text-white shadow-sm overflow-hidden',
                     isVibrant
                       ? 'bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500'
                       : isCustom && gradientColors
@@ -422,7 +448,11 @@ export function Sidebar() {
                       : undefined
                   }
                 >
-                  <Sparkles className="w-6 h-6" />
+                  <img 
+                    src="/logo-texai.png" 
+                    alt="TexAi Logo" 
+                    className="w-full h-full object-contain"
+                  />
                 </div>
               )}
               <div>

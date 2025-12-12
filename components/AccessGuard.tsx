@@ -93,8 +93,8 @@ export function AccessGuard({
           if (!finalFirebaseCheck) {
             // Só redirecionar se realmente não há usuário após todas as verificações
             const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
-            if (currentPath !== '/signin' && currentPath !== '/signin/') {
-              window.location.href = '/signin';
+            if (currentPath !== '/home' && currentPath !== '/home/') {
+              window.location.href = '/home';
             }
           } else {
             hasUserRef.current = true;
@@ -107,8 +107,8 @@ export function AccessGuard({
           const finalCheck = auth.currentUser;
           if (!finalCheck) {
             const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
-            if (currentPath !== '/signin' && currentPath !== '/signin/') {
-              window.location.href = '/signin';
+            if (currentPath !== '/home' && currentPath !== '/home/') {
+              window.location.href = '/home';
             }
           } else {
             hasUserRef.current = true;
@@ -214,7 +214,7 @@ export function AccessGuard({
             }
           </p>
           <button 
-            onClick={() => window.location.href = '/signin'}
+            onClick={() => window.location.href = '/home'}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
           >
             Voltar ao Login

@@ -56,9 +56,11 @@ export interface GranularPermissions {
   financeiroAcessoCompleto: boolean; // Acesso completo ao Controle Financeiro (inclui Relatórios e Resumo de Comissões)
   
   // Menus
+  menuAgenda: boolean; // Menu de Agenda
   menuProfissionais: boolean; // Menu de Profissionais
   menuClientes: boolean; // Menu de Clientes
   menuServicos: boolean; // Menu de Serviços
+  menuMensagens: boolean; // Menu de Mensagens
 }
 
 export interface CompanyUser {

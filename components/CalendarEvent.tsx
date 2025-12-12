@@ -267,9 +267,13 @@ export function CalendarEvent({
             side={isPopoverOpen ? "top" : undefined}
             align="center"
             sideOffset={12}
-            avoidCollisions
-            collisionPadding={{ top: 16, bottom: 200, left: 16, right: 16 }}
-            className="w-[min(24rem,calc(100vw-32px))] max-h-[calc(100vh-160px)] overflow-y-auto p-0 data-[side=bottom]:translate-y-[-48px]"
+            avoidCollisions={true}
+            collisionPadding={{ top: 24, bottom: 24, left: 24, right: 24 }}
+            className="w-[min(24rem,calc(100vw-48px))] max-h-[min(600px,calc(100vh-48px))] overflow-y-auto p-0"
+            style={{
+              maxWidth: 'var(--radix-popover-content-available-width, min(24rem, calc(100vw - 48px)))',
+              maxHeight: 'var(--radix-popover-content-available-height, min(600px, calc(100vh - 48px)))',
+            }}
           >
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
@@ -422,9 +426,13 @@ export function CalendarEvent({
           side={isPopoverOpen ? "top" : undefined}
           align="center"
           sideOffset={12}
-          avoidCollisions
-          collisionPadding={{ top: 16, bottom: 200, left: 16, right: 16 }}
-          className="w-[min(24rem,calc(100vw-32px))] max-h-[calc(100vh-160px)] overflow-y-auto p-0 data-[side=bottom]:translate-y-[-48px]"
+          avoidCollisions={true}
+          collisionPadding={{ top: 24, bottom: 24, left: 24, right: 24 }}
+          className="w-[min(24rem,calc(100vw-48px))] max-h-[min(600px,calc(100vh-48px))] overflow-y-auto p-0"
+          style={{
+            maxWidth: 'var(--radix-popover-content-available-width, min(24rem, calc(100vw - 48px)))',
+            maxHeight: 'var(--radix-popover-content-available-height, min(600px, calc(100vh - 48px)))',
+          }}
         >
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
