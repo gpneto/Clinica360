@@ -341,6 +341,14 @@ service cloud.firestore {
         allow delete: if (isOwnerOrAdmin() && belongsToCompany(companyId)) || isSuperAdmin();
       }
       
+      // Birthday Messages (mensagens de aniversário enviadas)
+      match /birthdayMessages/{messageId} {
+        // O caminho da coleção já isola por empresa
+        allow read: if isAuthenticated();
+        // Apenas Cloud Functions podem escrever
+        allow write: if false;
+      }
+      
       // Webhook Agendamentos (agendamentos recebidos via webhook)
       match /webhookAgendamentos/{webhookId} {
         // O caminho da coleção já isola por empresa
@@ -415,11 +423,6 @@ service cloud.firestore {
       allow write: if false; // Apenas Cloud Functions podem escrever
     }
     
-    // Birthday Messages (mensagens de aniversário enviadas)
-    match /birthdayMessages/{messageId} {
-      allow read: if isAuthenticated();
-      allow write: if false; // Apenas Cloud Functions podem escrever
-    }
 
     // ============================================
     // MÉTRICAS DE IA (APENAS SUPER_ADMIN)

@@ -1139,8 +1139,7 @@ exports.checkBirthdayMessageSent = (0, https_1.onCall)(async (request) => {
         }
         today.setHours(0, 0, 0, 0);
         const birthdayMessages = await db
-            .collection('birthdayMessages')
-            .where('companyId', '==', companyId)
+            .collection(`companies/${companyId}/birthdayMessages`)
             .where('patientId', '==', patientId)
             .where('sentAt', '>=', admin.firestore.Timestamp.fromDate(today))
             .get();
@@ -1914,8 +1913,7 @@ exports.sendBirthdayMessage = (0, https_1.onCall)({
         // Registrar no Firestore
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        await db.collection('birthdayMessages').add({
-            companyId,
+        await db.collection(`companies/${companyId}/birthdayMessages`).add({
             patientId,
             patientFirstName: patientFirstName || '',
             phone: destino,
@@ -1927,50 +1925,50 @@ exports.sendBirthdayMessage = (0, https_1.onCall)({
             birthdayDate: admin.firestore.Timestamp.fromDate(today),
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
-        // Registrar também em whatsappMessages para histórico (apenas se enviado com sucesso)
-        if (sentSuccessfully) {
-            const configCompanyId = config.companyId || companyId;
-            await db.collection(`companies/${configCompanyId}/whatsappMessages`).doc(wamId).set({
-                message: {
-                    id: wamId,
-                    to: chatId,
-                    type: 'text',
-                    provider: provider,
-                    text: {
-                        body: message.trim(),
-                        preview_url: false,
-                    },
-                },
-                wam_id: wamId,
-                chat_id: chatId,
+        // Registrar também em whatsappMessages para histórico (sempre registrar, mesmo se falhar)
+        const configCompanyId = config.companyId || companyId;
+        await db.collection(`companies/${configCompanyId}/whatsappMessages`).doc(wamId).set({
+            message: {
+                id: wamId,
+                to: chatId,
+                type: 'text',
                 provider: provider,
-                companyId: companyId,
-                direction: 'outbound',
-                messageSource: 'automatic',
-                sentBy: uid,
-                patientId: patientId,
-                messageType: 'birthday',
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            }, { merge: true });
-            // Buscar paciente pelo número de telefone para obter o nome (se companyId estiver disponível)
-            let patientName = null;
-            if (companyId) {
-                patientName = await findPatientNameByPhone(companyId, chatId);
-            }
-            // Preparar dados do contato
-            const contactData = {
-                last_message_at: admin.firestore.FieldValue.serverTimestamp(),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                companyId: companyId,
-            };
-            // Se encontrou o paciente, adicionar o nome ao contato
-            if (patientName) {
-                contactData.wa_id = chatId;
-                contactData.name = patientName;
-                contactData.patientName = patientName; // Campo adicional para compatibilidade
-            }
-            await db.collection('whatsappContacts').doc(chatId).set(contactData, { merge: true });
+                text: {
+                    body: message.trim(),
+                    preview_url: false,
+                },
+            },
+            wam_id: wamId,
+            chat_id: chatId,
+            provider: provider,
+            companyId: companyId,
+            direction: 'outbound',
+            messageSource: 'automatic',
+            sentBy: uid,
+            patientId: patientId,
+            messageType: 'birthday',
+            sentSuccessfully: sentSuccessfully,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        // Atualizar contato do WhatsApp (sempre, mesmo se falhar)
+        // Buscar paciente pelo número de telefone para obter o nome
+        let patientName = null;
+        if (companyId) {
+            patientName = await findPatientNameByPhone(companyId, chatId);
         }
+        // Preparar dados do contato
+        const contactData = {
+            wa_id: chatId,
+            last_message_at: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            companyId: companyId,
+        };
+        // Se encontrou o paciente, adicionar o nome ao contato
+        if (patientName) {
+            contactData.name = patientName;
+            contactData.patientName = patientName; // Campo adicional para compatibilidade
+        }
+        await db.collection(`companies/${configCompanyId}/whatsappContacts`).doc(chatId).set(contactData, { merge: true });
         // Preparar mensagem de retorno
         let returnMessage = '';
         if (sentSuccessfully) {

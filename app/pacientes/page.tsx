@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { AccessGuard } from '@/components/AccessGuard';
@@ -17,6 +17,8 @@ import { startOfDay } from 'date-fns';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select } from '@/components/ui/select';
 import { TAB_ITEMS } from '@/app/pacientes/detalhe/constants';
+import { useDebounce } from '@/hooks/useDebounce';
+import { normalizeString } from '@/lib/string-utils';
 
 export default function PatientsPage() {
   const { companyId, user, userData, themePreference, customColor, customColor2 } = useAuth();
@@ -66,6 +68,8 @@ export default function PatientsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  // Debounce do termo de busca para melhorar performance (150ms de delay - reduzido para resposta mais rápida)
+  const debouncedSearchTerm = useDebounce(searchTerm, 150);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [patientToDelete, setPatientToDelete] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'duplicates' | 'list'>('list');
@@ -221,87 +225,88 @@ export default function PatientsPage() {
     }
   };
 
-  // Detectar pacientes com telefones duplicados
-  const patientsWithDuplicatePhones = useMemo(() => {
-    const phoneMap = new Map<string, Patient[]>();
+  // Set de IDs de pacientes com telefones duplicados (O(1) lookup)
+  const duplicatePatientIdsSet = useMemo(() => {
+    console.time('[Performance] duplicatePatientIdsSet');
+    const phoneMap = new Map<string, string[]>(); // phone -> patientIds[]
     
-    // Agrupar pacientes por telefone
+    // Agrupar IDs de pacientes por telefone
     patients.forEach(patient => {
       if (patient.telefoneE164) {
         const phone = patient.telefoneE164;
         if (!phoneMap.has(phone)) {
           phoneMap.set(phone, []);
         }
-        phoneMap.get(phone)!.push(patient);
+        phoneMap.get(phone)!.push(patient.id);
       }
     });
     
-    // Retornar apenas telefones que aparecem mais de uma vez
-    const duplicates = new Set<string>();
-    phoneMap.forEach((patientList, phone) => {
-      if (patientList.length > 1) {
-        duplicates.add(phone);
+    // Criar Set com IDs de pacientes que têm telefones duplicados
+    const duplicateIds = new Set<string>();
+    phoneMap.forEach((patientIds) => {
+      if (patientIds.length > 1) {
+        patientIds.forEach(id => duplicateIds.add(id));
       }
     });
     
-    // Retornar todos os pacientes que têm telefones duplicados
-    return patients.filter(patient => 
-      patient.telefoneE164 && duplicates.has(patient.telefoneE164)
-    );
+    console.timeEnd('[Performance] duplicatePatientIdsSet');
+    console.log(`[Performance] duplicatePatientIdsSet: ${duplicateIds.size} duplicados de ${patients.length} pacientes`);
+    return duplicateIds;
   }, [patients]);
 
-  // Verificar se um paciente tem telefone duplicado
-  const duplicatePhonesSet = useMemo(() => {
-    const phoneMap = new Map<string, number>();
-    const duplicates = new Set<string>();
-    
-    patients.forEach(patient => {
-      if (patient.telefoneE164) {
-        const count = phoneMap.get(patient.telefoneE164) || 0;
-        phoneMap.set(patient.telefoneE164, count + 1);
-        if (count + 1 > 1) {
-          duplicates.add(patient.telefoneE164);
-        }
-      }
-    });
-    
-    return duplicates;
-  }, [patients]);
-
+  // Verificar se um paciente tem telefone duplicado (função memoizada)
   const hasDuplicatePhone = (patientId: string) => {
-    const patient = patients.find(p => p.id === patientId);
-    return patient?.telefoneE164 && duplicatePhonesSet.has(patient.telefoneE164);
+    return duplicatePatientIdsSet.has(patientId);
   };
 
+  // Índice pré-computado para campos normalizados (cacheado)
+  const patientsIndex = useMemo(() => {
+    console.time('[Performance] patientsIndex (indexação pré-computada)');
+    const result = patients.map(patient => ({
+      patient,
+      normalizedName: normalizeString(patient.nome || ''),
+      normalizedPhone: normalizeString(patient.telefoneE164 || ''),
+      normalizedEmail: normalizeString(patient.email || ''),
+    }));
+    console.timeEnd('[Performance] patientsIndex (indexação pré-computada)');
+    console.log(`[Performance] patientsIndex: ${result.length} pacientes indexados`);
+    return result;
+  }, [patients]);
+
   const filteredPatients = useMemo(() => {
-    const normalizeString = (value: string) =>
-      value
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase();
+    console.time('[Performance] filteredPatients');
+    
+    // Filtrar por aba primeiro (usando Set para O(1) lookup)
+    let baseIndex = activeTab === 'duplicates' 
+      ? patientsIndex.filter(item => duplicatePatientIdsSet.has(item.patient.id))
+      : patientsIndex;
+    
+    console.log(`[Performance] filteredPatients: baseIndex após filtro de aba: ${baseIndex.length} pacientes`);
 
-    // Filtrar por aba primeiro
-    let basePatients = activeTab === 'duplicates' 
-      ? patientsWithDuplicatePhones 
-      : activeTab === 'list'
-      ? patients
-      : patients;
+    // Depois filtrar por busca (usando debouncedSearchTerm)
+    const term = debouncedSearchTerm.trim();
+    if (!term) {
+      const result = baseIndex.map(item => item.patient);
+      console.timeEnd('[Performance] filteredPatients');
+      console.log(`[Performance] filteredPatients: ${result.length} pacientes (sem busca)`);
+      return result;
+    }
 
-    // Depois filtrar por busca
-    const term = searchTerm.trim();
     const normalizedTerm = normalizeString(term);
-    if (!normalizedTerm) return basePatients;
-    return basePatients.filter((patient) => {
-      const name = patient.nome ? normalizeString(patient.nome) : '';
-      const phone = patient.telefoneE164 ? normalizeString(patient.telefoneE164) : '';
-      const email = patient.email ? normalizeString(patient.email) : '';
-      return (
-        name.includes(normalizedTerm) ||
-        phone.includes(normalizedTerm) ||
-        email.includes(normalizedTerm)
-      );
-    });
-  }, [patients, searchTerm, activeTab, patientsWithDuplicatePhones]);
+    const result = baseIndex
+      .filter((item) => {
+        return (
+          item.normalizedName.includes(normalizedTerm) ||
+          item.normalizedPhone.includes(normalizedTerm) ||
+          item.normalizedEmail.includes(normalizedTerm)
+        );
+      })
+      .map(item => item.patient);
+    
+    console.timeEnd('[Performance] filteredPatients');
+    console.log(`[Performance] filteredPatients: ${result.length} pacientes após busca "${term}"`);
+    return result;
+  }, [patientsIndex, debouncedSearchTerm, activeTab, duplicatePatientIdsSet]);
 
   const collator = useMemo(() => {
     const locale = 'pt-BR';
@@ -315,22 +320,46 @@ export default function PatientsPage() {
     return new Intl.Collator(locale);
   }, []);
 
+  // Ordenação otimizada - usar Intl.Collator diretamente (mais rápido)
   const sortedPatients = useMemo(() => {
-    const normalizeString = (value: string) =>
-      value
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase();
-
-    return [...filteredPatients].sort((a, b) => {
-      if (typeof collator.compare === 'function') {
-        return collator.compare(a.nome || '', b.nome || '');
-      }
-      const aName = normalizeString(a.nome || '');
-      const bName = normalizeString(b.nome || '');
-      return aName.localeCompare(bName, 'pt-BR', { sensitivity: 'base', ignorePunctuation: true });
+    console.time('[Performance] sortedPatients');
+    
+    if (filteredPatients.length === 0) {
+      console.timeEnd('[Performance] sortedPatients');
+      console.log('[Performance] sortedPatients: array vazio, retornando vazio');
+      return [];
+    }
+    
+    if (filteredPatients.length === 1) {
+      console.timeEnd('[Performance] sortedPatients');
+      console.log('[Performance] sortedPatients: apenas 1 item, pulando ordenação');
+      return filteredPatients; // Pular ordenação para 1 item
+    }
+    
+    // Criar cópia e ordenar in-place (mais eficiente que spread)
+    const result = filteredPatients.slice();
+    result.sort((a, b) => {
+      // Intl.Collator.compare é otimizado pelo navegador
+      return collator.compare(a.nome || '', b.nome || '');
     });
+    
+    console.timeEnd('[Performance] sortedPatients');
+    console.log(`[Performance] sortedPatients: ${result.length} pacientes ordenados`);
+    return result;
   }, [filteredPatients, collator]);
+
+  // Medir tempo de renderização
+  useEffect(() => {
+    const renderStartTime = performance.now();
+    
+    // Usar requestAnimationFrame para medir depois que o DOM foi atualizado
+    requestAnimationFrame(() => {
+      const renderTime = performance.now() - renderStartTime;
+      console.log(`[Performance] ⏱️  Renderização do componente: ${renderTime.toFixed(2)}ms`);
+      console.log(`[Performance] 📊 Total de pacientes renderizados: ${sortedPatients.length}`);
+      console.log('─────────────────────────────────────────────────');
+    });
+  }, [sortedPatients.length]);
 
   if (loading) {
     return (
@@ -572,7 +601,7 @@ export default function PatientsPage() {
                   <div>
                     <p className={cn('text-sm mb-1', isVibrant ? 'text-white/70' : 'text-amber-600')}>Telefones Duplicados</p>
                     <p className={cn('text-3xl font-bold', isVibrant ? 'text-white' : '')}>
-                      {patientsWithDuplicatePhones.length}
+                      {duplicatePatientIdsSet.size}
                     </p>
                   </div>
                   <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
@@ -648,7 +677,7 @@ export default function PatientsPage() {
                 )}
               >
                 <AlertTriangle className={cn('w-4 h-4', activeTab === 'duplicates' ? 'text-amber-600' : 'text-slate-500')} />
-                Duplicados ({patientsWithDuplicatePhones.length})
+                Duplicados ({duplicatePatientIdsSet.size})
               </button>
             </div>
 
@@ -695,10 +724,7 @@ export default function PatientsPage() {
 
           {/* Patients Grid or Table */}
           {activeTab === 'list' ? (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
+            <div
               className={cn(
                 'rounded-xl border overflow-hidden',
                 isVibrant 
@@ -742,12 +768,9 @@ export default function PatientsPage() {
                   <tbody className={cn(
                     isVibrant ? 'bg-white/30' : 'bg-white divide-y divide-slate-200'
                   )}>
-                    {sortedPatients.map((patient, index) => (
-                      <motion.tr
+                    {sortedPatients.map((patient) => (
+                      <tr
                         key={patient.id}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.05 }}
                         onClick={() => router.push(`/pacientes/detalhe?patientId=${patient.id}`)}
                         className={cn(
                           'cursor-pointer transition-colors',
@@ -876,7 +899,7 @@ export default function PatientsPage() {
                             </Button>
                           </div>
                         </td>
-                      </motion.tr>
+                      </tr>
                     ))}
                   </tbody>
                 </table>
@@ -889,20 +912,12 @@ export default function PatientsPage() {
                   Nenhum {singularLabel} encontrado.
                 </div>
               )}
-            </motion.div>
+            </div>
           ) : (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-            >
-            {sortedPatients.map((patient, index) => (
-              <motion.div
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {sortedPatients.map((patient) => (
+              <div
                 key={patient.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
                 onClick={() => router.push(`/pacientes/detalhe?patientId=${patient.id}`)}
                 className={cn(
                   'cursor-pointer overflow-hidden rounded-2xl border-2 transition-all duração-300 group relative',
@@ -1096,9 +1111,9 @@ export default function PatientsPage() {
                     )}
                   </div>
                 </div>
-              </motion.div>
+              </div>
             ))}
-          </motion.div>
+          </div>
           )}
 
           {patients.length === 0 && (

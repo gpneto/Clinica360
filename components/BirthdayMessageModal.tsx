@@ -142,24 +142,38 @@ Parabéns pelo seu dia especial! 🎈`;
 
   // Função para extrair apenas a mensagem da IA da mensagem completa
   const extractAiMessage = (completeMessage: string): string => {
-    // Remover cabeçalho do template (linha com "Feliz Aniversário")
+    if (!completeMessage || !completeMessage.trim()) {
+      return '';
+    }
+
     const lines = completeMessage.split('\n');
-    const startIndex = lines.findIndex(line => 
+    
+    // Encontrar onde começa o cabeçalho do template (linha com "Feliz Aniversário" e nome)
+    const headerStartIndex = lines.findIndex(line => 
       line.includes('Feliz Aniversário') || line.includes('*Feliz Aniversário')
     );
     
-    if (startIndex === -1) {
-      // Se não encontrar o cabeçalho, retornar a mensagem original
-      return completeMessage.trim();
+    // Se não encontrar o cabeçalho, pode ser que a mensagem já esteja no formato correto
+    if (headerStartIndex === -1) {
+      // Remover qualquer "Feliz Aniversário" que possa estar na mensagem da IA
+      const cleaned = completeMessage
+        .replace(/🎉\s*\*?Feliz\s+Aniversário[^*]*\*?\s*🎉/gi, '')
+        .trim();
+      return cleaned || '';
     }
 
-    // Encontrar onde começa a mensagem da IA (após linha em branco após o cabeçalho)
-    let aiStartIndex = startIndex + 1;
+    // Pular a linha do cabeçalho e qualquer linha em branco após ela
+    let aiStartIndex = headerStartIndex + 1;
     while (aiStartIndex < lines.length && lines[aiStartIndex].trim() === '') {
       aiStartIndex++;
     }
 
-    // Encontrar onde termina a mensagem da IA (antes do fechamento)
+    // Se chegou ao final do array, não há mensagem
+    if (aiStartIndex >= lines.length) {
+      return '';
+    }
+
+    // Encontrar onde termina a mensagem da IA (antes do fechamento do template)
     const closingPhrases = [
       'Agradecemos sua confiança',
       'Parabéns pelo seu dia especial',
@@ -175,7 +189,17 @@ Parabéns pelo seu dia especial! 🎈`;
 
     // Extrair apenas a mensagem da IA
     const aiLines = lines.slice(aiStartIndex, aiEndIndex);
-    return aiLines.join('\n').trim();
+    let extracted = aiLines.join('\n').trim();
+    
+    // Remover qualquer cabeçalho "Feliz Aniversário" que possa estar na mensagem extraída
+    // (caso a IA tenha incluído na resposta)
+    extracted = extracted
+      .replace(/🎉\s*\*?Feliz\s+Aniversário[^*]*\*?\s*🎉/gi, '')
+      .replace(/^\*?Feliz\s+Aniversário[^*]*\*?/gi, '')
+      .trim();
+    
+    // Se a extração resultou em string vazia, retornar string vazia
+    return extracted;
   };
 
   const sendMessage = async () => {
@@ -191,14 +215,51 @@ Parabéns pelo seu dia especial! 🎈`;
 
       // Extrair apenas a mensagem da IA da mensagem completa
       const aiMessage = extractAiMessage(message.trim());
+      
+      // Validar que a mensagem extraída não está vazia
+      if (!aiMessage || !aiMessage.trim()) {
+        console.error('[sendMessage] Mensagem extraída está vazia:', {
+          originalMessage: message,
+          extractedMessage: aiMessage
+        });
+        showError('Erro ao processar mensagem. Por favor, gere uma nova mensagem.');
+        setLoading(false);
+        return;
+      }
 
-      const result = await sendBirthdayMessage({
-        patientId,
-        companyId,
-        message: aiMessage,
-        phone: patientPhone,
-        patientFirstName,
-      }) as { data: { success: boolean; wamId: string; sentAutomatically?: boolean; message?: string; error?: string } };
+      // Validar todos os parâmetros antes de enviar
+      const params = {
+        patientId: patientId?.trim(),
+        companyId: companyId?.trim(),
+        message: aiMessage.trim(),
+        phone: patientPhone?.trim(),
+        patientFirstName: patientFirstName?.trim(),
+      };
+
+      console.log('[sendMessage] Enviando mensagem com parâmetros:', {
+        patientId: params.patientId,
+        companyId: params.companyId,
+        messageLength: params.message.length,
+        phone: params.phone,
+        patientFirstName: params.patientFirstName,
+        allFieldsPresent: Object.values(params).every(v => v && v.length > 0)
+      });
+
+      // Verificar se todos os campos estão presentes
+      if (!params.patientId || !params.companyId || !params.message || !params.phone || !params.patientFirstName) {
+        console.error('[sendMessage] Parâmetros faltando:', {
+          hasPatientId: !!params.patientId,
+          hasCompanyId: !!params.companyId,
+          hasMessage: !!params.message,
+          hasPhone: !!params.phone,
+          hasPatientFirstName: !!params.patientFirstName,
+        });
+        showError('Dados incompletos. Por favor, verifique os dados do paciente.');
+        setLoading(false);
+        return;
+      }
+
+      const result = await sendBirthdayMessage(params) as { data: { success: boolean; wamId: string; sentAutomatically?: boolean; message?: string; error?: string } };
 
       if (result.data.success) {
         // Mostrar mensagem apropriada baseada no resultado
@@ -455,10 +516,31 @@ Parabéns pelo seu dia especial! 🎈`;
                       </Button>
                     </>
                   ) : (
-                    <div className="w-full bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                      <p className="text-yellow-800 text-sm">
-                        Telefone não disponível. Use o botão copiar para copiar a mensagem.
-                      </p>
+                    <div className="w-full flex flex-col gap-2">
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                        <p className="text-yellow-800 text-sm">
+                          Telefone não disponível. Use o botão copiar para copiar a mensagem.
+                        </p>
+                      </div>
+                      <Button
+                        onClick={copyToClipboard}
+                        disabled={loading || !message.trim()}
+                        variant="outline"
+                        className="w-full border-slate-300 text-slate-700 hover:bg-slate-50"
+                        title="Copiar mensagem"
+                      >
+                        {copied ? (
+                          <>
+                            <Check className="h-4 w-4 mr-2 text-green-600" />
+                            Mensagem copiada!
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-4 w-4 mr-2" />
+                            Copiar Mensagem
+                          </>
+                        )}
+                      </Button>
                     </div>
                   )}
                 </div>

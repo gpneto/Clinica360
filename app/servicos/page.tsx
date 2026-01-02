@@ -745,10 +745,7 @@ export default function ServicesPage() {
           {/* Services Grid or Table */}
           {activeTab === 'list' ? (
             <TooltipProvider>
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.2 }}
+              <div
                 className={cn(
                   'rounded-xl border overflow-hidden',
                   hasGradient 
@@ -825,12 +822,9 @@ export default function ServicesPage() {
                         </td>
                       </tr>
                     ) : (
-                      filteredServices.map((service, index) => (
-                        <motion.tr
+                      filteredServices.map((service) => (
+                        <tr
                           key={service.id}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: index * 0.05 }}
                           className={cn(
                             'transition-colors',
                             hasGradient
@@ -971,21 +965,16 @@ export default function ServicesPage() {
                               </Button>
                             </div>
                           </td>
-                        </motion.tr>
+                        </tr>
                       ))
                     )}
                   </tbody>
                   </table>
                 </div>
-              </motion.div>
+              </div>
             </TooltipProvider>
           ) : (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-            >
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredServices.length === 0 ? (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -1054,12 +1043,9 @@ export default function ServicesPage() {
                 )}
               </motion.div>
             ) : (
-              filteredServices.map((service, index) => (
-              <motion.div
+              filteredServices.map((service) => (
+              <div
                 key={service.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
                 className={cn(
                   'rounded-2xl border-2 transition-all duration-300 overflow-hidden group',
                   hasGradient
@@ -1196,10 +1182,10 @@ export default function ServicesPage() {
                     </div>
                   )}
                 </div>
-              </motion.div>
+              </div>
               ))
             )}
-          </motion.div>
+          </div>
           )}
         </div>
 

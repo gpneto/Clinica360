@@ -944,14 +944,96 @@ export function usePatient(companyId: string | null | undefined, patientId: stri
   }, [companyId, patientId]);
 
   const updatePatient = async (data: Partial<Patient>) => {
-    if (!companyId || !patientId) throw new Error('companyId e patientId são obrigatórios');
+    console.log('[updatePatient] === INÍCIO ===');
+    console.log('[updatePatient] companyId:', companyId);
+    console.log('[updatePatient] patientId:', patientId);
+    console.log('[updatePatient] data recebido:', data);
+    console.log('[updatePatient] data keys:', Object.keys(data || {}));
+    
+    if (!companyId || !patientId) {
+      const errorMsg = `companyId e patientId são obrigatórios. companyId: ${companyId}, patientId: ${patientId}`;
+      console.error('[updatePatient]', errorMsg);
+      throw new Error(errorMsg);
+    }
+    
     try {
-      await updateDoc(doc(db, `companies/${companyId}/patients`, patientId), {
-        ...data,
+      // Limpar dados undefined/null antes de enviar
+      const cleanData: Record<string, any> = {};
+      Object.keys(data).forEach(key => {
+        const value = (data as any)[key];
+        if (value !== undefined && value !== null) {
+          // Converter Date para Timestamp se necessário
+          if (value instanceof Date) {
+            cleanData[key] = Timestamp.fromDate(value);
+          } else {
+            cleanData[key] = value;
+          }
+        }
+      });
+      
+      console.log('[updatePatient] Dados limpos para envio:', cleanData);
+      console.log('[updatePatient] Caminho do documento:', `companies/${companyId}/patients/${patientId}`);
+      
+      const docRef = doc(db, `companies/${companyId}/patients`, patientId);
+      
+      // Verificar se o documento existe antes de atualizar
+      const docSnap = await getDoc(docRef);
+      if (!docSnap.exists()) {
+        throw new Error(`Documento do paciente não encontrado: ${patientId}`);
+      }
+      
+      console.log('[updatePatient] Documento existe, atualizando...');
+      
+      await updateDoc(docRef, {
+        ...cleanData,
         updatedAt: Timestamp.now()
       });
-    } catch (err) {
-      throw new Error('Erro ao atualizar paciente');
+      
+      console.log('[updatePatient] ✅ Atualização concluída com sucesso');
+    } catch (err: any) {
+      // Log detalhado do erro
+      console.error('[updatePatient] ❌ ERRO CAPTURADO');
+      console.error('[updatePatient] Tipo do erro:', typeof err);
+      console.error('[updatePatient] É instância de Error?', err instanceof Error);
+      console.error('[updatePatient] Erro completo (objeto):', err);
+      
+      // Tentar acessar propriedades comuns
+      if (err) {
+        console.error('[updatePatient] err.message:', err.message);
+        console.error('[updatePatient] err.code:', err.code);
+        console.error('[updatePatient] err.name:', err.name);
+        console.error('[updatePatient] err.stack:', err.stack);
+        
+        // Tentar acessar todas as propriedades
+        console.error('[updatePatient] Todas as propriedades:', Object.keys(err));
+        console.error('[updatePatient] Object.getOwnPropertyNames:', Object.getOwnPropertyNames(err));
+      }
+      
+      console.error('[updatePatient] Contexto do erro:', {
+        companyId,
+        patientId,
+        dataKeys: Object.keys(data || {}),
+        dataSize: JSON.stringify(data || {}).length,
+        hasData: !!data
+      });
+      
+      // Tentar stringify do erro se possível
+      try {
+        const errorString = JSON.stringify(err, Object.getOwnPropertyNames(err), 2);
+        console.error('[updatePatient] Erro (JSON stringify):', errorString);
+      } catch (e) {
+        console.error('[updatePatient] Não foi possível serializar o erro:', e);
+        // Tentar stringify simples
+        try {
+          console.error('[updatePatient] Erro (toString):', String(err));
+        } catch (e2) {
+          console.error('[updatePatient] Não foi possível converter erro para string');
+        }
+      }
+      
+      const errorMessage = err?.message || err?.code || err?.toString() || 'Erro desconhecido ao atualizar paciente';
+      console.error('[updatePatient] Mensagem de erro final:', errorMessage);
+      throw new Error(`Erro ao atualizar paciente: ${errorMessage}`);
     }
   };
 
