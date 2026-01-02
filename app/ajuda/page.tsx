@@ -34,8 +34,14 @@ import { helpCategories } from './helpData';
 
 // Re-export types for convenience
 export type { HelpCategory, HelpSection, HelpFeature } from './helpData';
+
+export default function HelpPage() {
+  const { themePreference, customColor, customColor2 } = useAuth();
   const customerLabels = useCustomerLabels();
   const router = useRouter();
+  const pathname = usePathname();
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const isVibrant = themePreference === 'vibrant';
   const isCustom = themePreference === 'custom';
   const hasGradient = isVibrant || isCustom;

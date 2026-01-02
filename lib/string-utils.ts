@@ -30,7 +30,9 @@ export function normalizeString(value: string): string {
   if (normalizationCache.size >= MAX_CACHE_SIZE) {
     // Remover a entrada mais antiga (Map mantém ordem de inserção)
     const firstKey = normalizationCache.keys().next().value;
-    normalizationCache.delete(firstKey);
+    if (firstKey !== undefined) {
+      normalizationCache.delete(firstKey);
+    }
   }
 
   // Armazenar no cache
