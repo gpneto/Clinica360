@@ -1138,12 +1138,19 @@ async function handleMessage(companyId, message, instanceName) {
             messageData.messageSource = existingMessageSource;
         }
         // Não definir messageSource para mensagens do webhook (nem automatic nem manual)
+        // IMPORTANTE: Mensagens inbound (recebidas) NÃO devem ter o campo 'read' definido
+        // Isso permite que sejam identificadas como não lidas no frontend
+        // Se for mensagem inbound e já existe com read: true, não sobrescrever (preservar estado de leitura)
+        // Se for mensagem inbound nova, read será undefined (não lida)
+        // Se for mensagem outbound, não importa (mensagens enviadas não precisam de read)
         console.log(`[Evolution Webhook] 💾 Salvando mensagem no Firestore (${companyId}):`, {
             wamId,
             chatId,
             messageType,
+            direction,
             hasMedia: !!mediaInfo,
             willSave: true,
+            readField: direction === 'inbound' ? 'undefined (não lida)' : 'n/a (outbound)',
         });
         await messageRef.set(messageData, { merge: true });
         // Verificar se foi salvo corretamente

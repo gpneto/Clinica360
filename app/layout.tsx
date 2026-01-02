@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/lib/auth-context';
+import { WhatsAppNotifications } from '@/components/WhatsAppNotifications';
 import { SidebarWrapper } from '@/components/SidebarWrapper';
 import { Toaster } from '@/components/ui/toast';
 import { IosPreventZoom } from '@/components/IosPreventZoom';
@@ -35,6 +36,7 @@ export default function RootLayout({
         <GoogleAnalytics />
         <IosPreventZoom />
         <AuthProvider>
+          <WhatsAppNotifications />
           <SidebarWrapper>
             {children}
             <PageViewTracker />

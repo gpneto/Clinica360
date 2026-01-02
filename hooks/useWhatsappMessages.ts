@@ -42,6 +42,7 @@ export interface WhatsAppContact {
   profilePicUrl?: string; // URL da foto do perfil
   remoteJid?: string; // RemoteJid do WhatsApp para buscar foto na API
   last_message_at?: Date | Timestamp;
+  lastReadAt?: Date | Timestamp; // Timestamp da última vez que as mensagens foram lidas
   updatedAt?: Date | Timestamp;
   unreadCount?: number;
   lastMessage?: string;
@@ -140,6 +141,7 @@ export function useWhatsAppContacts(companyId: string | null | undefined) {
                 profilePicUrl: contactData.profilePicUrl || undefined,
                 remoteJid: contactData.remoteJid || undefined,
                 last_message_at: lastMessageDate || contactData.last_message_at,
+                lastReadAt: contactData.lastReadAt || undefined,
                 updatedAt: contactData.updatedAt,
                 unreadCount: 0, // Será preenchido depois
                 lastMessage,
@@ -155,16 +157,53 @@ export function useWhatsAppContacts(companyId: string | null | undefined) {
             Promise.all(
               waIds.map(async (waId) => {
                 try {
-                  // Query já está isolada pelo caminho companies/${companyId}/whatsappMessages
-                  const unreadQuery = query(
+                  const contact = contactsMap.get(waId);
+                  const lastReadAt = contact?.lastReadAt;
+                  
+                  // Buscar todas as mensagens inbound
+                  const allInboundQuery = query(
                     collection(db, `companies/${companyId}/whatsappMessages`),
                     where('chat_id', '==', waId),
-                    where('direction', '==', 'inbound'),
-                    where('read', '==', false)
+                    where('direction', '==', 'inbound')
                   );
-                  const unreadSnapshot = await getDocs(unreadQuery);
-                  return { waId, count: unreadSnapshot.size };
+                  
+                  const allInboundSnapshot = await getDocs(allInboundQuery);
+                  
+                  // Se não tem lastReadAt, todas as mensagens são não lidas
+                  if (!lastReadAt) {
+                    return { waId, count: allInboundSnapshot.size };
+                  }
+                  
+                  // Converter lastReadAt para timestamp (milliseconds)
+                  const lastReadTimestamp = lastReadAt instanceof Timestamp 
+                    ? lastReadAt.toMillis() 
+                    : lastReadAt instanceof Date 
+                      ? lastReadAt.getTime()
+                      : 0;
+                  
+                  // Contar mensagens que foram enviadas depois de lastReadAt
+                  let unreadCount = 0;
+                  allInboundSnapshot.docs.forEach(doc => {
+                    const data = doc.data();
+                    const messageTimestamp = data.messageTimestamp || data.createdAt;
+                    
+                    // Converter messageTimestamp para timestamp (milliseconds)
+                    let messageTime = 0;
+                    if (messageTimestamp instanceof Timestamp) {
+                      messageTime = messageTimestamp.toMillis();
+                    } else if (messageTimestamp instanceof Date) {
+                      messageTime = messageTimestamp.getTime();
+                    }
+                    
+                    // Mensagem não lida se foi enviada depois de lastReadAt
+                    if (messageTime > lastReadTimestamp) {
+                      unreadCount++;
+                    }
+                  });
+                  
+                  return { waId, count: unreadCount };
                 } catch (error) {
+                  console.error(`Erro ao contar mensagens não lidas para ${waId}:`, error);
                   return { waId, count: 0 };
                 }
               })
@@ -203,7 +242,7 @@ export function useWhatsAppContacts(companyId: string | null | undefined) {
             }
           });
 
-          // Converter para array mantendo a ordem do Firestore (já vem ordenado)
+          // Converter para array mantendo a ordem do Firestore (ordenado por last_message_at)
           const contactsData: WhatsAppContact[] = [];
           for (const contactDoc of contactsSnapshot.docs) {
             const contactData = contactDoc.data();
@@ -214,20 +253,8 @@ export function useWhatsAppContacts(companyId: string | null | undefined) {
             }
           }
           
-          // Reordenar apenas para priorizar não lidas (mantendo ordem do Firestore dentro de cada grupo)
-          const withUnread: WhatsAppContact[] = [];
-          const withoutUnread: WhatsAppContact[] = [];
-          
-          for (const contact of contactsData) {
-            if (contact.unreadCount && contact.unreadCount > 0) {
-              withUnread.push(contact);
-            } else {
-              withoutUnread.push(contact);
-            }
-          }
-          
-          // Juntar: não lidas primeiro (já ordenadas pelo Firestore), depois as demais (já ordenadas pelo Firestore)
-          const finalContacts = [...withUnread, ...withoutUnread];
+          // Manter a ordem do Firestore (ordenado por last_message_at desc - mais recentes primeiro)
+          const finalContacts = contactsData;
 
           setContacts(finalContacts);
           setLoading(false);
@@ -398,6 +425,9 @@ export function useWhatsAppMessages(
 
             // Adicionar apenas mensagens mais recentes que a última carregada
             if (messageTime > newestTime) {
+              // Preservar o estado de leitura: se read não estiver definido, considerar como undefined (não lida)
+              const readValue = data.read !== undefined ? data.read : undefined;
+              
               newRealtimeMessages.push({
                 id: docSnap.id,
                 wam_id: data.wam_id,
@@ -407,7 +437,7 @@ export function useWhatsAppMessages(
                 createdAt: data.createdAt,
                 messageTimestamp: data.messageTimestamp,
                 companyId: data.companyId,
-                read: data.read || false,
+                read: readValue,
                 readAt: data.readAt,
                 messageSource: data.messageSource,
               });
@@ -535,6 +565,10 @@ export function useWhatsAppMessages(
           seenWamIds.add(data.wam_id);
         }
         
+        // Preservar o estado de leitura: se read não estiver definido, considerar como undefined (não lida)
+        // Não usar || false aqui, pois undefined significa não lida, false também significa não lida
+        const readValue = data.read !== undefined ? data.read : undefined;
+        
         newMessages.push({
           id: doc.id,
           wam_id: data.wam_id,
@@ -544,7 +578,7 @@ export function useWhatsAppMessages(
           createdAt: data.createdAt,
           messageTimestamp: data.messageTimestamp,
           companyId: data.companyId,
-          read: data.read || false,
+          read: readValue,
           readAt: data.readAt,
           messageSource: data.messageSource,
         });
@@ -609,24 +643,9 @@ export function useWhatsAppMessages(
       setLastVisible(lastDoc);
       setHasMore(snapshot.docs.length === MESSAGES_PER_PAGE);
 
-      // Marcar mensagens recebidas como lidas
-      const unreadMessages = newMessages.filter(
-        (msg) => msg.direction === 'inbound' && !msg.read
-      );
-
-      if (unreadMessages.length > 0) {
-        unreadMessages.forEach(async (msg) => {
-          try {
-            const messageRef = doc(db, `companies/${companyId}/whatsappMessages`, msg.id);
-            await updateDoc(messageRef, {
-              read: true,
-              readAt: Timestamp.now(),
-            });
-          } catch (err) {
-            console.error('Erro ao marcar mensagem como lida:', err);
-          }
-        });
-      }
+      // NÃO marcar mensagens como lidas automaticamente ao carregar
+      // As mensagens só devem ser marcadas como lidas quando o usuário visualizar o chat
+      // Isso será feito na página de mensagens quando o chat for aberto/focado
 
       // Escutar novas mensagens em tempo real (apenas as mais recentes)
       // Aguardar um pouco para garantir que as mensagens iniciais foram carregadas

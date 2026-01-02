@@ -262,6 +262,9 @@ async function storeIncomingMessage(message: any, companyId?: string | null) {
   const rawChatId = message.from || null;
   const chatId = rawChatId ? normalizePhoneForContact(rawChatId) : null;
   
+  // IMPORTANTE: Mensagens inbound (recebidas) NÃO devem ter o campo 'read' definido
+  // Isso permite que sejam identificadas como não lidas no frontend
+  // O campo 'read' será undefined por padrão, indicando que a mensagem não foi lida
   const messageData = {
     wam_id: message.id,
     message,
@@ -273,6 +276,7 @@ async function storeIncomingMessage(message: any, companyId?: string | null) {
     messageTimestamp: message.timestamp
       ? DateTime.fromSeconds(Number.parseInt(message.timestamp, 10)).toJSDate()
       : FieldValue.serverTimestamp(),
+    // Não definir 'read' - será undefined (não lida)
   };
 
   if (companyId) {

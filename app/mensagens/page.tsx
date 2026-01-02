@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useWhatsAppContacts, useWhatsAppMessages, sendWhatsAppMessage, WhatsAppContact, WhatsAppMessage } from '@/hooks/useWhatsappMessages';
 import { MessageCircle, Send, Search, Phone, User, Bot, UserCircle, ArrowLeft, Image, Video, Music, FileText, Download, RefreshCw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { httpsCallable } from 'firebase/functions';
@@ -319,9 +320,57 @@ export default function MensagensPage() {
   });
 
   // Filtrar mensagens se o filtro estiver ativo
-  const filteredMessages = filterAutomaticOnly 
-    ? messages.filter((message) => message.messageSource === 'automatic')
-    : messages;
+  const filteredMessages = useMemo(() => {
+    const filtered = filterAutomaticOnly 
+      ? messages.filter((message) => message.messageSource === 'automatic')
+      : messages;
+    
+    return filtered;
+  }, [messages, filterAutomaticOnly]);
+
+  // Separar mensagens não lidas das lidas
+  const { unreadMessages, readMessages } = useMemo(() => {
+    const unread = filteredMessages.filter((message) => {
+      // Mensagem não lida: deve ser inbound e read deve ser explicitamente false ou undefined
+      return message.direction === 'inbound' && (message.read === false || message.read === undefined);
+    });
+    const read = filteredMessages.filter((message) => {
+      // Mensagens lidas: outbound ou inbound com read === true
+      return message.direction === 'outbound' || message.read === true;
+    });
+    
+    // Log para debug
+    console.log('[Mensagens] Separando mensagens:', {
+      total: filteredMessages.length,
+      unread: unread.length,
+      read: read.length,
+      unreadSample: unread.slice(0, 3).map(m => ({ id: m.id, direction: m.direction, read: m.read })),
+    });
+    
+    return { unreadMessages: unread, readMessages: read };
+  }, [filteredMessages]);
+
+  // Marcar mensagens como lidas quando o chat for aberto/focado
+  // Atualiza o campo lastReadAt no contato ao invés de atualizar cada mensagem individual
+  useEffect(() => {
+    if (!companyId || !selectedContact?.wa_id || messagesLoading) return;
+
+    // Aguardar um pouco para garantir que as mensagens foram carregadas
+    const markAsReadTimeout = setTimeout(async () => {
+      try {
+        // Atualizar o campo lastReadAt no contato para marcar todas as mensagens como lidas
+        const contactRef = doc(db, `companies/${companyId}/whatsappContacts`, selectedContact.wa_id);
+        await updateDoc(contactRef, {
+          lastReadAt: serverTimestamp(),
+        });
+        console.log(`[Mensagens] Marcadas todas as mensagens como lidas para o contato ${selectedContact.wa_id}`);
+      } catch (err) {
+        console.error('Erro ao marcar mensagens como lidas no contato:', err);
+      }
+    }, 500); // Aguardar 500ms após abrir o chat
+
+    return () => clearTimeout(markAsReadTimeout);
+  }, [companyId, selectedContact?.wa_id, messagesLoading]);
 
   // Scroll para última mensagem ao carregar inicialmente ou quando receber nova mensagem
   const isInitialLoadRef = useRef(true);
@@ -827,8 +876,8 @@ export default function MensagensPage() {
                           {contact.lastMessage || 'Sem mensagens'}
                         </p>
                         {hasUnread && (
-                          <span className="flex-shrink-0 ml-2 bg-blue-500 text-white text-xs font-semibold rounded-full w-5 h-5 flex items-center justify-center">
-                            {contact.unreadCount}
+                          <span className="flex-shrink-0 ml-2 bg-blue-500 text-white text-xs font-semibold rounded-full min-w-[1.25rem] h-5 px-1.5 flex items-center justify-center">
+                            {contact.unreadCount && contact.unreadCount > 99 ? '99+' : contact.unreadCount}
                           </span>
                         )}
                       </div>
@@ -959,7 +1008,7 @@ export default function MensagensPage() {
             >
               {messagesLoading ? (
                 <div className="text-center text-slate-500 py-8">Carregando mensagens...</div>
-              ) : filteredMessages.length === 0 ? (
+              ) : (unreadMessages.length === 0 && readMessages.length === 0) ? (
                 <div className="text-center text-slate-500 py-8">
                   {filterAutomaticOnly 
                     ? 'Nenhuma mensagem automática encontrada para este contato.'
@@ -981,7 +1030,90 @@ export default function MensagensPage() {
                       Carregando mensagens anteriores...
                     </div>
                   )}
-                  {filteredMessages.map((message, index) => {
+                  {/* Seção de Mensagens Não Lidas */}
+                  {unreadMessages.length > 0 && (
+                    <>
+                      <div className="sticky top-0 z-10 bg-blue-50/90 backdrop-blur-sm py-2 px-4 mb-4 rounded-lg border border-blue-200">
+                        <h3 className="text-sm font-semibold text-blue-900">
+                          Mensagens não lidas ({unreadMessages.length})
+                        </h3>
+                      </div>
+                      {unreadMessages.map((message, index) => {
+                        const isInbound = message.direction === 'inbound';
+                        const messageText = getMessageText(message);
+                        const messageDate = message.messageTimestamp || message.createdAt;
+                        const isAutomatic = message.messageSource === 'automatic';
+                        const isManual = message.messageSource === 'manual';
+                        const mediaInfo = getMediaInfo(message);
+                        const hasMedia = !!mediaInfo;
+                        const hasText = messageText && messageText !== '[Mensagem não suportada]';
+
+                        // Usar uma key única combinando id e wam_id para evitar duplicatas
+                        const uniqueKey = message.wam_id ? `${message.id}-${message.wam_id}` : `${message.id}-unread-${index}`;
+
+                        return (
+                          <div
+                            key={uniqueKey}
+                            className={`flex ${isInbound ? 'justify-start' : 'justify-end'}`}
+                          >
+                            <div
+                              className={`
+                                max-w-[85%] md:max-w-[70%] rounded-2xl px-3 py-2 md:px-4 md:py-2 shadow-sm
+                                ${isInbound 
+                                  ? 'bg-white text-slate-900 rounded-tl-none border-2 border-blue-400' 
+                                  : 'bg-blue-500 text-white rounded-tr-none'
+                                }
+                              `}
+                            >
+                              {hasMedia && renderMedia(mediaInfo!, message, isInbound)}
+                              {hasText && (
+                                <p className={`text-sm md:text-base whitespace-pre-wrap break-words font-bold ${hasMedia ? 'mt-2' : ''}`}>
+                                  {messageText}
+                                </p>
+                              )}
+                              <div className={`flex items-center justify-between ${hasText || hasMedia ? 'mt-1' : ''} gap-2`}>
+                                <p className={`text-xs font-semibold ${isInbound ? 'text-slate-600' : 'text-blue-100'}`}>
+                                  {formatMessageDate(messageDate)}
+                                </p>
+                                {!isInbound && (
+                                  <div className="flex items-center gap-1">
+                                    {isAutomatic && (
+                                      <span 
+                                        className="flex items-center gap-0.5 md:gap-1 text-[10px] md:text-xs px-1 md:px-1.5 py-0.5 rounded bg-blue-600/30 text-blue-100"
+                                        title="Mensagem automática do sistema"
+                                      >
+                                        <Bot className="w-2.5 h-2.5 md:w-3 md:h-3" />
+                                        <span className="hidden sm:inline">Automática</span>
+                                      </span>
+                                    )}
+                                    {isManual && (
+                                      <span 
+                                        className="flex items-center gap-0.5 md:gap-1 text-[10px] md:text-xs px-1 md:px-1.5 py-0.5 rounded bg-blue-600/30 text-blue-100"
+                                        title="Mensagem enviada manualmente"
+                                      >
+                                        <UserCircle className="w-2.5 h-2.5 md:w-3 md:h-3" />
+                                        <span className="hidden sm:inline">Manual</span>
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {readMessages.length > 0 && (
+                        <div className="mt-6 pt-4 border-t border-slate-200">
+                          <h3 className="text-sm font-semibold text-slate-600 mb-4 px-2">
+                            Mensagens anteriores
+                          </h3>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  
+                  {/* Seção de Mensagens Lidas */}
+                  {readMessages.map((message, index) => {
                     const isInbound = message.direction === 'inbound';
                     const messageText = getMessageText(message);
                     const messageDate = message.messageTimestamp || message.createdAt;
@@ -992,7 +1124,7 @@ export default function MensagensPage() {
                     const hasText = messageText && messageText !== '[Mensagem não suportada]';
 
                     // Usar uma key única combinando id e wam_id para evitar duplicatas
-                    const uniqueKey = message.wam_id ? `${message.id}-${message.wam_id}` : `${message.id}-${index}`;
+                    const uniqueKey = message.wam_id ? `${message.id}-${message.wam_id}` : `${message.id}-read-${index}`;
 
                     return (
                       <div

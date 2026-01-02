@@ -218,9 +218,7 @@ export function useServices(companyId: string | null | undefined) {
                     }>
                   : {};
                 
-                console.log('[loadServices] Status dos templates carregado:', templatesStatus);
-                console.log('[loadServices] Campos editados dos templates:', templatesEdited);
-
+          
                 // Buscar templates dentais
                 const templatesQuery = query(
                   collection(db, 'dental_procedures_templates'),
@@ -228,7 +226,6 @@ export function useServices(companyId: string | null | undefined) {
                 );
                 const templatesSnapshot = await getDocs(templatesQuery);
                 
-                console.log('[loadServices] Total de templates encontrados:', templatesSnapshot.docs.length);
                 
                 const templates = templatesSnapshot.docs
                   .map(templateDoc => {
@@ -243,7 +240,6 @@ export function useServices(companyId: string | null | undefined) {
                     // Aplicar campos editados se existirem
                     const editedFields = templatesEdited[templateId] || {};
                     
-                    console.log(`[loadServices] Template ${templateId}: status=${templateStatus}, isActive=${isActive}, editedFields=`, editedFields);
                     
                     return {
                       id: `template_${templateId}`, // Prefixo para identificar como template
