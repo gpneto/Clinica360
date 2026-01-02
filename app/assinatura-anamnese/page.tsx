@@ -679,14 +679,14 @@ function AssinaturaAnamneseContent() {
                                                   variant={respostaAtual?.resposta === 'nao' ? 'default' : 'outline'}
                                                   onClick={() => atualizarResposta(secao.id, pergunta.id, { 
                                                     resposta: 'nao', 
-                                                    texto: respostaAtual?.texto || '' 
+                                                    texto: '' 
                                                   })}
                                                   className={respostaAtual?.resposta === 'nao' ? 'bg-red-600 hover:bg-red-700 text-white' : ''}
                                                 >
                                                   Não
                                                 </Button>
                                               </div>
-                                              {(respostaAtual?.resposta === 'sim' || respostaAtual?.resposta === 'nao') && (
+                                              {respostaAtual?.resposta === 'sim' && (
                                                 <div>
                                                   <Label className="text-sm font-medium text-gray-700 mb-2 block">
                                                     {pergunta.pergunta.includes('Qual') || pergunta.pergunta.includes('qual') 

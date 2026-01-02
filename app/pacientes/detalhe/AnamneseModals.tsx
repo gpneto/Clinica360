@@ -474,18 +474,20 @@ export function AnamneseModals({
                                                   type="radio"
                                                   name={`resposta-${respostaKey}`}
                                                   checked={respostaAtual.resposta === 'nao'}
-                                                  onChange={() => onAtualizarResposta(secao.id, pergunta.id, { ...respostaAtual, resposta: 'nao' })}
+                                                  onChange={() => onAtualizarResposta(secao.id, pergunta.id, { ...respostaAtual, resposta: 'nao', texto: '' })}
                                                   className="w-4 h-4 text-blue-600"
                                                 />
                                                 <span className="text-sm font-medium">Não</span>
                                               </label>
                                             </div>
-                                            <Textarea
-                                              value={respostaAtual.texto || ''}
-                                              onChange={(e) => onAtualizarResposta(secao.id, pergunta.id, { ...respostaAtual, texto: e.target.value })}
-                                              placeholder="Adicione observações (opcional)..."
-                                              className="w-full min-h-[100px]"
-                                            />
+                                            {respostaAtual.resposta === 'sim' && (
+                                              <Textarea
+                                                value={respostaAtual.texto || ''}
+                                                onChange={(e) => onAtualizarResposta(secao.id, pergunta.id, { ...respostaAtual, texto: e.target.value })}
+                                                placeholder="Qual?"
+                                                className="w-full min-h-[100px]"
+                                              />
+                                            )}
                                           </div>
                                         )}
                                       </div>

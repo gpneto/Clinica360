@@ -34,8 +34,9 @@ export function SidebarWrapper({ children }: SidebarWrapperProps) {
     }
   }, [loading, user, needsContextSelection, needsCompanySetup, pathname, router]);
 
-  // Não mostrar sidebar na página de login, contexto, setup, ajuda e assinatura de orçamento/anamnese (páginas públicas)
-  const shouldShowSidebar = user && pathname !== '/home' && pathname !== '/contexto' && pathname !== '/setup' && pathname !== '/ajuda' && !pathname?.startsWith('/assinatura-orcamento') && !pathname?.startsWith('/assinatura-anamnese') && !needsCompanySetup;
+  // Não mostrar sidebar na página de login, contexto, setup e assinatura de orçamento/anamnese (páginas públicas)
+  // A ajuda agora mostra o sidebar
+  const shouldShowSidebar = user && pathname !== '/home' && pathname !== '/contexto' && pathname !== '/setup' && !pathname?.startsWith('/assinatura-orcamento') && !pathname?.startsWith('/assinatura-anamnese') && !needsCompanySetup;
 
   return (
     <TutorialProvider>

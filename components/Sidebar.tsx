@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -149,13 +149,42 @@ const navigation: NavigationItem[] = [
   },
   { 
     name: 'Ajuda', 
-    href: '/ajuda', 
     icon: HelpCircle, 
-    roles: ['owner', 'admin', 'pro', 'atendente', 'outro']
+    roles: ['owner', 'admin', 'pro', 'atendente', 'outro'],
+    submenu: [
+      {
+        name: 'Funcionalidades',
+        href: '/ajuda/funcionalidades',
+        icon: LayoutDashboard,
+        roles: ['owner', 'admin', 'pro', 'atendente', 'outro'],
+        submenu: [
+          { name: 'Dashboard', href: '/ajuda/funcionalidades/dashboard', icon: LayoutDashboard, roles: ['owner', 'admin', 'pro', 'atendente', 'outro'] },
+          { name: 'Agenda', href: '/ajuda/funcionalidades/agenda', icon: Calendar, roles: ['owner', 'admin', 'pro', 'atendente', 'outro'] },
+          { name: 'Pacientes', href: '/ajuda/funcionalidades/pacientes', icon: HeartPulse, roles: ['owner', 'admin', 'pro', 'atendente', 'outro'] },
+          { name: 'Mensagens', href: '/ajuda/funcionalidades/mensagens', icon: MessageCircle, roles: ['owner', 'admin', 'atendente', 'outro'] },
+          { name: 'Assistente IA', href: '/ajuda/funcionalidades/assistente-ia', icon: Sparkles, roles: ['owner', 'admin', 'pro', 'atendente', 'outro'] },
+          { name: 'Relatórios', href: '/ajuda/funcionalidades/relatorios', icon: BarChart3, roles: ['owner', 'admin', 'outro'] },
+        ]
+      },
+      {
+        name: 'Configurações',
+        href: '/ajuda/configuracoes',
+        icon: Settings,
+        roles: ['owner', 'admin', 'pro', 'atendente', 'outro'],
+        submenu: [
+          { name: 'Geral', href: '/ajuda/configuracoes/geral', icon: Settings, roles: ['owner', 'admin'] },
+          { name: 'Profissionais', href: '/ajuda/configuracoes/profissionais', icon: UserCheck, roles: ['owner', 'admin', 'outro'] },
+          { name: 'Serviços', href: '/ajuda/configuracoes/servicos', icon: Package, roles: ['owner', 'admin', 'pro', 'atendente', 'outro'] },
+          { name: 'Usuários', href: '/ajuda/configuracoes/usuarios', icon: Users, roles: ['owner', 'admin'] },
+          { name: 'Modelos de Anamnese', href: '/ajuda/configuracoes/modelos-anamnese', icon: FileText, roles: ['owner', 'admin'] },
+          { name: 'Plano', href: '/ajuda/configuracoes/plano', icon: CreditCard, roles: ['owner', 'admin'] },
+        ]
+      },
+    ]
   },
 ];
 
-export function Sidebar() {
+function SidebarContent() {
   const [isOpen, setIsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [openSubmenus, setOpenSubmenus] = useState<Set<string>>(new Set());
@@ -273,14 +302,34 @@ export function Sidebar() {
   }, [role, userWithPermissions]);
 
   // Função para verificar se um item ou seus submenus estão ativos
-  const isItemOrSubmenuActive = (item: NavigationItem): boolean => {
-    if (item.href) {
-      const isActive = item.href === '/' 
-        ? pathname === '/' 
-        : pathname === item.href || pathname.startsWith(item.href + '/');
-      if (isActive) return true;
+  // Função para verificar se um item específico está ativo (sem recursão)
+  const isItemActive = (item: NavigationItem): boolean => {
+    if (!item.href) return false;
+    
+    // Normalizar paths removendo trailing slashes e query params
+    const normalizePath = (path: string) => path.split('?')[0].replace(/\/$/, '');
+    const hrefPath = normalizePath(item.href);
+    const currentPath = normalizePath(pathname);
+    
+    // Para rotas de ajuda, verificar se o path corresponde exatamente
+    if (hrefPath.startsWith('/ajuda/')) {
+      // Comparação exata do path normalizado
+      return currentPath === hrefPath;
     }
     
+    return hrefPath === '/' 
+      ? currentPath === '/' 
+      : currentPath === hrefPath || currentPath.startsWith(hrefPath + '/');
+  };
+
+  // Função para verificar se um item ou seus submenus estão ativos (com recursão)
+  const isItemOrSubmenuActive = (item: NavigationItem): boolean => {
+    // Primeiro verifica se o próprio item está ativo
+    if (isItemActive(item)) {
+      return true;
+    }
+    
+    // Se tem submenu, verifica recursivamente
     if (item.submenu) {
       return item.submenu.some(subItem => isItemOrSubmenuActive(subItem));
     }
@@ -311,12 +360,36 @@ export function Sidebar() {
       let hasActive = false;
       
       items.forEach(item => {
+        // Verificar se o próprio item está ativo
+        const isItemActive = item.href ? (() => {
+          const hrefPath = item.href.split('?')[0];
+          const currentPath = pathname.split('?')[0];
+          
+          if (hrefPath.startsWith('/ajuda/')) {
+            return currentPath === hrefPath || currentPath.startsWith(hrefPath + '/');
+          }
+          
+          return hrefPath === '/' 
+            ? currentPath === '/' 
+            : currentPath === hrefPath || currentPath.startsWith(hrefPath + '/');
+        })() : false;
+        
         if (item.submenu) {
+          // Verificar se algum filho está ativo
           const hasActiveChild = item.submenu.some(subItem => {
             if (subItem.href) {
-              const isActive = subItem.href === '/' 
-                ? pathname === '/' 
-                : pathname === subItem.href || pathname.startsWith(subItem.href + '/');
+              const normalizePath = (path: string) => path.split('?')[0].replace(/\/$/, '');
+              const hrefPath = normalizePath(subItem.href);
+              const currentPath = normalizePath(pathname);
+              
+              // Para rotas de ajuda, verificar se o path corresponde exatamente ou é um prefixo
+              if (hrefPath.startsWith('/ajuda/')) {
+                return currentPath === hrefPath || currentPath.startsWith(hrefPath + '/');
+              }
+              
+              const isActive = hrefPath === '/' 
+                ? currentPath === '/' 
+                : currentPath === hrefPath || currentPath.startsWith(hrefPath + '/');
               return isActive;
             }
             // Verificar recursivamente em submenus aninhados
@@ -327,12 +400,15 @@ export function Sidebar() {
             return false;
           });
           
-          if (hasActiveChild) {
+          // Se o item está ativo ou tem um filho ativo, abrir o submenu
+          if (isItemActive || hasActiveChild) {
             const menuKey = parentName ? `${parentName}-${item.name}` : item.name;
             newOpenSubmenus.add(menuKey);
             checkAndOpenSubmenus(item.submenu, menuKey);
             hasActive = true;
           }
+        } else if (isItemActive) {
+          hasActive = true;
         }
       });
       
@@ -556,13 +632,13 @@ export function Sidebar() {
               {filteredNavigation.map((item, index) => {
                 const renderNavigationItem = (navItem: NavigationItem, depth: number = 0, parentKey: string = '') => {
                   const itemKey = parentKey ? `${parentKey}-${navItem.name}` : navItem.name;
-                  const isActive = navItem.href ? (navItem.href === '/' 
-                    ? pathname === '/' 
-                    : pathname === navItem.href || pathname.startsWith(navItem.href + '/')) : false;
                   const hasSubmenu = navItem.submenu && navItem.submenu.length > 0;
                   const isSubmenuOpen = openSubmenus.has(itemKey);
                   const displayName = navItem.name === 'Pacientes' ? customerLabels.pluralTitle : navItem.name;
-                  const isItemActive = isItemOrSubmenuActive(navItem);
+                  // Verificar se o item específico está ativo (sem recursão)
+                  const isActive = isItemActive(navItem);
+                  // Verificar se o item ou algum submenu está ativo (com recursão) - usado para destacar categoria pai
+                  const isItemOrSubmenuActiveFlag = isItemOrSubmenuActive(navItem);
 
                   return (
                     <div key={itemKey}>
@@ -642,7 +718,7 @@ export function Sidebar() {
                                   }}
                                   className={cn(
                                     'p-2 rounded-lg transition-colors',
-                                    isActive
+                                    isItemOrSubmenuActiveFlag
                                       ? 'text-white hover:bg-white/20'
                                       : hasGradient
                                         ? 'text-slate-500 hover:bg-white/60 hover:text-slate-900'
@@ -656,7 +732,7 @@ export function Sidebar() {
                                     <ChevronRight
                                       className={cn(
                                         'h-4 w-4 transition-all',
-                                        isActive
+                                        isItemOrSubmenuActiveFlag
                                           ? 'text-white'
                                           : 'text-slate-300 group-hover:text-slate-500'
                                       )}
@@ -675,7 +751,7 @@ export function Sidebar() {
                                     whileTap={{ scale: 0.98 }}
                                     className={cn(
                                       'group relative flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200',
-                                      isItemActive
+                                      isItemOrSubmenuActiveFlag
                                         ? isVibrant
                                           ? 'bg-gradient-to-r from-indigo-500 to-rose-500 text-white shadow-lg'
                                           : isCustom && gradientStyleHorizontal
@@ -686,16 +762,16 @@ export function Sidebar() {
                                           : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                                     )}
                                     style={
-                                      isItemActive && isCustom && gradientStyleHorizontal
+                                      isItemOrSubmenuActiveFlag && isCustom && gradientStyleHorizontal
                                         ? gradientStyleHorizontal
                                         : undefined
                                     }
                                   >
                                     <motion.div
-                                      whileHover={{ rotate: isItemActive ? 0 : 10 }}
+                                      whileHover={{ rotate: isItemOrSubmenuActiveFlag ? 0 : 10 }}
                                       className={cn(
                                         'flex h-8 w-8 items-center justify-center rounded-lg transition-colors',
-                                        isItemActive
+                                        isItemOrSubmenuActiveFlag
                                           ? hasGradient
                                             ? 'bg-white/20'
                                             : 'bg-white/10'
@@ -707,14 +783,14 @@ export function Sidebar() {
                                       <navItem.icon
                                         className={cn(
                                           'w-5 h-5 flex-shrink-0',
-                                          isItemActive ? 'text-white' : 'text-slate-500 group-hover:text-slate-700'
+                                          isItemOrSubmenuActiveFlag ? 'text-white' : 'text-slate-500 group-hover:text-slate-700'
                                         )}
                                       />
                                     </motion.div>
                                     <span
                                       className={cn(
                                         'flex-1 text-left',
-                                        isItemActive 
+                                        isItemOrSubmenuActiveFlag 
                                           ? 'text-white' 
                                           : hasGradient
                                             ? 'text-slate-600 group-hover:text-slate-900'
@@ -727,7 +803,7 @@ export function Sidebar() {
                                 </div>
                                 <div className={cn(
                                   'p-2 rounded-lg transition-colors',
-                                  isItemActive
+                                  isItemOrSubmenuActiveFlag
                                     ? 'text-white'
                                     : hasGradient
                                       ? 'text-slate-500'
@@ -740,7 +816,7 @@ export function Sidebar() {
                                     <ChevronRight
                                       className={cn(
                                         'h-4 w-4 transition-all',
-                                        isItemActive
+                                        isItemOrSubmenuActiveFlag
                                           ? 'text-white'
                                           : 'text-slate-300'
                                       )}
@@ -920,5 +996,17 @@ export function Sidebar() {
         />
       )}
     </>
+  );
+}
+
+export function Sidebar() {
+  return (
+    <Suspense fallback={
+      <div className="w-64 h-screen bg-white border-r border-slate-200 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    }>
+      <SidebarContent />
+    </Suspense>
   );
 }

@@ -1,0 +1,32 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Permitir upload de assinaturas de anamneses (sem autenticação necessária)
+    // Caminho: companies/{companyId}/patients/{patientId}/anamneses/{anamneseId}/signature.png
+    match /companies/{companyId}/patients/{patientId}/anamneses/{anamneseId}/signature.png {
+      // Permitir upload apenas de arquivos PNG com tamanho máximo de 5MB
+      allow write: if request.resource.size < 5 * 1024 * 1024 
+                    && request.resource.contentType == 'image/png';
+      // Permitir leitura para qualquer pessoa (para visualizar assinaturas)
+      allow read: if true;
+    }
+    
+    // Permitir upload de assinaturas de orçamentos (sem autenticação necessária)
+    // Caminho: companies/{companyId}/patients/{patientId}/orcamentos/{orcamentoId}/signature.png
+    match /companies/{companyId}/patients/{patientId}/orcamentos/{orcamentoId}/signature.png {
+      // Permitir upload apenas de arquivos PNG com tamanho máximo de 5MB
+      allow write: if request.resource.size < 5 * 1024 * 1024 
+                    && request.resource.contentType == 'image/png';
+      // Permitir leitura para qualquer pessoa (para visualizar assinaturas)
+      allow read: if true;
+    }
+    
+    // Permitir acesso autenticado para outros arquivos da empresa
+    // Esta regra não interfere com as assinaturas acima porque são caminhos mais específicos
+    match /companies/{companyId}/{allPaths=**} {
+      allow read, write: if request.auth != null 
+                          && request.auth.token.companyId == companyId;
+    }
+  }
+}
+

@@ -5,6 +5,8 @@ import { AuthProvider } from '@/lib/auth-context';
 import { SidebarWrapper } from '@/components/SidebarWrapper';
 import { Toaster } from '@/components/ui/toast';
 import { IosPreventZoom } from '@/components/IosPreventZoom';
+import { GoogleAnalytics } from '@/components/GoogleAnalytics';
+import { PageViewTracker } from '@/components/PageViewTracker';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -30,10 +32,12 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body className={inter.className}>
+        <GoogleAnalytics />
         <IosPreventZoom />
         <AuthProvider>
           <SidebarWrapper>
             {children}
+            <PageViewTracker />
           </SidebarWrapper>
           <Toaster position="top-right" />
         </AuthProvider>

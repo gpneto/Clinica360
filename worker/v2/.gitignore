@@ -1,0 +1,29 @@
+# Arquivo de ambiente com informações sensíveis
+.env
+.env.local
+.env.*.local
+
+# Backups
+.env.backup.*
+
+# Logs
+*.log
+logs/
+
+# Arquivos temporários
+*.tmp
+*.temp
+.DS_Store
+
+# Evolution API source (manter no git mas ignorar node_modules)
+evolution-api-src/node_modules/
+evolution-api-src/dist/
+evolution-api-src/.env
+
+# Imagens Docker compiladas
+*.tar
+*.tar.gz
+evolution-api-v2-image.tar*
+
+# Arquivos temporários de compactação
+/tmp/evolution-api-src-*.zip

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth-context';
+import { useAnalytics } from '@/hooks/useAnalytics';
 import { Send, Loader2, Bot, User, X, RotateCcw, History, Download, Lightbulb, Calendar, BarChart3, MessageSquare, Briefcase, Trash2, Mic, MicOff } from 'lucide-react';
 import { cn, getGradientColors, getGradientStyle } from '@/lib/utils';
 import { createPortal } from 'react-dom';
@@ -180,6 +181,7 @@ function exportConversation(messages: Message[]): void {
 
 export function FloatingAIAssistant() {
   const { companyId, user, themePreference, customColor, customColor2 } = useAuth();
+  const { trackEvent } = useAnalytics();
   const pathname = usePathname();
   const isMessagesPage = pathname?.startsWith('/mensagens');
   
@@ -446,6 +448,14 @@ export function FloatingAIAssistant() {
     
     if (!finalInput || loading || !companyId) return;
 
+    // Rastrear envio de mensagem
+    trackEvent('ai_assistant_query', {
+      event_category: 'ai_assistant',
+      event_label: 'query_sent',
+      query_length: finalInput.length,
+      is_command: !!command,
+    });
+
     const userMessage: Message = {
       role: 'user',
       content: finalInput,
@@ -488,12 +498,28 @@ export function FloatingAIAssistant() {
       const finalMessages = [...updatedMessages, assistantMessage];
       setMessages(finalMessages);
 
+      // Rastrear resposta recebida
+      trackEvent('ai_assistant_response', {
+        event_category: 'ai_assistant',
+        event_label: 'response_received',
+        has_function_calls: !!result.data.functionCalls,
+        response_length: (result.data.message || '').length,
+      });
+
       if (companyId) {
         saveConversation(finalMessages, companyId);
         setSavedConversations(loadSavedConversations(companyId));
       }
     } catch (error: any) {
       console.error('Erro ao chamar IA:', error);
+      
+      // Rastrear erro
+      trackEvent('ai_assistant_error', {
+        event_category: 'ai_assistant',
+        event_label: 'error',
+        error_message: error.message || 'unknown_error',
+      });
+      
       const errorMessage: Message = {
         role: 'assistant',
         content: `Desculpe, ocorreu um erro: ${error.message || 'Erro desconhecido'}. Por favor, tente novamente.`,
@@ -795,7 +821,13 @@ export function FloatingAIAssistant() {
       {/* Botão Flutuante */}
       {!isMessagesPage && !isAppointmentModalOpen && (
         <motion.button
-          onClick={() => setIsOpen(true)}
+          onClick={() => {
+            setIsOpen(true);
+            trackEvent('ai_assistant_opened', {
+              event_category: 'ai_assistant',
+              event_label: 'assistant_opened',
+            });
+          }}
           className={cn(
             'fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-white',
             hasGradient
