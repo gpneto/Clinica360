@@ -24,11 +24,17 @@ import {
   Users,
   Loader2,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Plus,
+  Trash2,
+  Calendar,
+  Search,
+  Package,
+  Check
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Timestamp, collection, doc, getCountFromServer, getDoc, onSnapshot, query, setDoc, where, addDoc, writeBatch, getDocs } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, functions, storage } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth-context';
@@ -36,7 +42,7 @@ import { useTutorial } from '@/components/tutorial/TutorialProvider';
 import { cn } from '@/lib/utils';
 import { addMonths, subMonths, formatDistanceToNow, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useCompany } from '@/hooks/useFirestore';
+import { useCompany, useServices } from '@/hooks/useFirestore';
 import { TipoEstabelecimento, Patient } from '@/types';
 import { updateDoc } from 'firebase/firestore';
 import { SampleDataGenerator } from '@/lib/sample-data-generator';
@@ -56,6 +62,46 @@ const TIPOS_ESTABELECIMENTO: { value: TipoEstabelecimento; label: string }[] = [
   { value: 'outros', label: 'Outros' },
 ];
 
+// Tipos para configuração de horários
+interface HorarioDia {
+  diaSemana: number; // 0-6 (domingo-sábado)
+  inicio: string; // HH:mm
+  fim: string; // HH:mm
+  ativo: boolean;
+}
+
+interface Intervalo {
+  id: string;
+  diaSemana: number; // 0-6 (domingo-sábado)
+  inicio: string; // HH:mm
+  fim: string; // HH:mm
+  descricao?: string; // Ex: "Almoço", "Intervalo"
+}
+
+interface Bloqueio {
+  id: string;
+  tipo: 'semanal' | 'mensal' | 'data_especifica'; // Tipo de recorrência
+  diaSemana?: number; // 0-6 (para tipo 'semanal')
+  diaMes?: number; // 1-31 (para tipo 'mensal')
+  dataEspecifica?: string; // YYYY-MM-DD (para tipo 'data_especifica')
+  inicio: string; // HH:mm
+  fim: string; // HH:mm
+  descricao?: string; // Ex: "Reunião", "Manutenção"
+  ativo: boolean;
+}
+
+interface HorarioFuncionamentoConfig {
+  // Estrutura antiga (mantida para compatibilidade)
+  inicio?: string;
+  fim?: string;
+  diasSemana?: number[];
+  
+  // Nova estrutura
+  horariosPorDia?: HorarioDia[]; // Horários configurados por dia
+  intervalos?: Intervalo[]; // Intervalos (ex: almoço)
+  bloqueios?: Bloqueio[]; // Bloqueios recorrentes ou específicos
+}
+
 interface SettingsData {
   // Configurações gerais
   nomeSalao: string; // Mantido para compatibilidade, será usado como nomeFantasia
@@ -70,12 +116,13 @@ interface SettingsData {
   whatsappNumber?: string;
   customerLabel: 'paciente' | 'cliente';
   
+  // Configurações de agendamento pelo WhatsApp
+  agendamentoWhatsappHabilitado?: boolean;
+  agendamentoWhatsappApenasContatos?: boolean;
+  agendamentoWhatsappServicosIds?: string[]; // IDs dos serviços disponíveis para agendamento pelo WhatsApp
+  
   // Configurações de horário
-  horarioFuncionamento: {
-    inicio: string;
-    fim: string;
-    diasSemana: number[];
-  };
+  horarioFuncionamento: HorarioFuncionamentoConfig;
   
   // Configurações financeiras
   comissaoPadrao: number;
@@ -138,6 +185,7 @@ const currencyFormatter = new Intl.NumberFormat('pt-BR', {
 export default function SettingsPage() {
   const { companyId, themePreference, user } = useAuth();
   const { company } = useCompany(companyId);
+  const { services, loading: servicesLoading } = useServices(companyId);
   const [settings, setSettings] = useState<SettingsData>({
     nomeSalao: '',
     nomeFantasia: '',
@@ -149,10 +197,19 @@ export default function SettingsPage() {
     whatsappProvider: 'disabled',
     whatsappIntegrationType: undefined,
     customerLabel: 'paciente',
+    agendamentoWhatsappHabilitado: false,
+    agendamentoWhatsappApenasContatos: false,
+    agendamentoWhatsappServicosIds: [],
     horarioFuncionamento: {
-      inicio: '08:00',
-      fim: '18:00',
-      diasSemana: [1, 2, 3, 4, 5]
+      horariosPorDia: [
+        { diaSemana: 1, inicio: '08:00', fim: '18:00', ativo: true },
+        { diaSemana: 2, inicio: '08:00', fim: '18:00', ativo: true },
+        { diaSemana: 3, inicio: '08:00', fim: '18:00', ativo: true },
+        { diaSemana: 4, inicio: '08:00', fim: '18:00', ativo: true },
+        { diaSemana: 5, inicio: '08:00', fim: '18:00', ativo: true },
+      ],
+      intervalos: [],
+      bloqueios: []
     },
     comissaoPadrao: 30,
     taxaCancelamento: 0,
@@ -170,6 +227,7 @@ export default function SettingsPage() {
   const [evolutionStatus, setEvolutionStatus] = useState<Record<string, any> | null>(null);
   const [evolutionPairingLoading, setEvolutionPairingLoading] = useState(false);
   const [evolutionPairingError, setEvolutionPairingError] = useState<string | null>(null);
+  const [disconnecting, setDisconnecting] = useState(false);
   const [evolutionPairingTriggeredAt, setEvolutionPairingTriggeredAt] = useState<number | null>(null);
   const [qrCodeErrorCount, setQrCodeErrorCount] = useState(0);
   const [qrCodeSrc, setQrCodeSrc] = useState<string | null>(null);
@@ -199,6 +257,10 @@ export default function SettingsPage() {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  
+  // Estados para seleção de serviços do WhatsApp
+  const [showServiceModal, setShowServiceModal] = useState(false);
+  const [serviceQuery, setServiceQuery] = useState('');
   
   // Estados para migração do Capim
   const [capimEmail, setCapimEmail] = useState('');
@@ -265,6 +327,34 @@ export default function SettingsPage() {
           // Migrar nomeSalao para nomeFantasia se necessário (compatibilidade com dados antigos)
           const nomeFantasia = data.nomeFantasia ?? data.nomeSalao ?? '';
           
+          // Migrar horário de funcionamento antigo para nova estrutura
+          let horarioFuncionamento: HorarioFuncionamentoConfig = prev.horarioFuncionamento;
+          if (data.horarioFuncionamento) {
+            const horarioAntigo = data.horarioFuncionamento;
+            // Se tem estrutura antiga (inicio, fim, diasSemana) e não tem nova estrutura
+            if (horarioAntigo.inicio && horarioAntigo.fim && horarioAntigo.diasSemana && 
+                !horarioAntigo.horariosPorDia) {
+              // Migrar para nova estrutura
+              horarioFuncionamento = {
+                horariosPorDia: horarioAntigo.diasSemana.map(dia => ({
+                  diaSemana: dia,
+                  inicio: horarioAntigo.inicio!,
+                  fim: horarioAntigo.fim!,
+                  ativo: true
+                })),
+                intervalos: horarioAntigo.intervalos || [],
+                bloqueios: horarioAntigo.bloqueios || []
+              };
+            } else {
+              // Usar nova estrutura ou mesclar com padrões
+              horarioFuncionamento = {
+                horariosPorDia: horarioAntigo.horariosPorDia || prev.horarioFuncionamento.horariosPorDia || [],
+                intervalos: horarioAntigo.intervalos || [],
+                bloqueios: horarioAntigo.bloqueios || []
+              };
+            }
+          }
+          
           return {
             ...prev,
             ...data,
@@ -279,6 +369,7 @@ export default function SettingsPage() {
             whatsappNumber: data.whatsappNumber ? (data.whatsappNumber as string) : undefined,
             customerLabel: (data.customerLabel as SettingsData['customerLabel']) ?? prev.customerLabel,
             showCommission: data.showCommission ?? prev.showCommission,
+            horarioFuncionamento,
           };
         });
         
@@ -872,6 +963,15 @@ export default function SettingsPage() {
             capimPassword: capimPassword,
             updatedAt: Timestamp.now()
           });
+          
+          // Atualizar cache Redis de configurações com os novos valores
+          try {
+            const updateCache = httpsCallable(functions, 'updateSettingsCache');
+            await updateCache({ companyId });
+            console.log('[Configurações] Cache Redis atualizado após salvar credenciais Capim');
+          } catch (cacheError) {
+            console.warn('[Configurações] Erro ao atualizar cache (não crítico):', cacheError);
+          }
         } catch (saveError) {
           console.warn('Erro ao salvar credenciais do Capim:', saveError);
           // Não é crítico, apenas avisa mas não impede o login
@@ -1648,6 +1748,26 @@ export default function SettingsPage() {
         }
       }
 
+      // Função recursiva para remover campos undefined (Firestore não aceita undefined)
+      const removeUndefined = (obj: any): any => {
+        if (obj === null || obj === undefined) {
+          return null;
+        }
+        if (Array.isArray(obj)) {
+          return obj.map(item => removeUndefined(item)).filter(item => item !== undefined);
+        }
+        if (typeof obj === 'object') {
+          const cleaned: any = {};
+          for (const [key, value] of Object.entries(obj)) {
+            if (value !== undefined) {
+              cleaned[key] = removeUndefined(value);
+            }
+          }
+          return cleaned;
+        }
+        return obj;
+      };
+
       // Salvar configurações da empresa específica
       const settingsToSave = {
         ...settings,
@@ -1655,15 +1775,50 @@ export default function SettingsPage() {
         nomeSalao: settings.nomeFantasia ?? settings.nomeSalao ?? '',
         // Incluir credenciais do Capim se estiverem preenchidas
         ...(capimEmail ? { capimEmail } : {}),
-        ...(capimPassword ? { capimPassword } : {})
+        ...(capimPassword ? { capimPassword } : {}),
+        // Limpar horarioFuncionamento removendo campos undefined
+        horarioFuncionamento: {
+          horariosPorDia: settings.horarioFuncionamento.horariosPorDia?.map(h => ({
+            diaSemana: h.diaSemana,
+            inicio: h.inicio,
+            fim: h.fim,
+            ativo: h.ativo
+          })) || [],
+          intervalos: settings.horarioFuncionamento.intervalos?.map(i => ({
+            id: i.id,
+            diaSemana: i.diaSemana,
+            inicio: i.inicio,
+            fim: i.fim,
+            ...(i.descricao ? { descricao: i.descricao } : {})
+          })) || [],
+          bloqueios: settings.horarioFuncionamento.bloqueios?.map(b => ({
+            id: b.id,
+            tipo: b.tipo,
+            inicio: b.inicio,
+            fim: b.fim,
+            ativo: b.ativo,
+            ...(b.diaSemana !== undefined ? { diaSemana: b.diaSemana } : {}),
+            ...(b.diaMes !== undefined ? { diaMes: b.diaMes } : {}),
+            ...(b.dataEspecifica ? { dataEspecifica: b.dataEspecifica } : {}),
+            ...(b.descricao ? { descricao: b.descricao } : {})
+          })) || []
+        }
       };
       
-      // Remover campos undefined antes de salvar (Firestore não aceita undefined)
-      const cleanedSettings = Object.fromEntries(
-        Object.entries(settingsToSave).filter(([_, value]) => value !== undefined)
-      );
+      // Remover campos undefined recursivamente antes de salvar
+      const cleanedSettings = removeUndefined(settingsToSave);
       
       await setDoc(doc(db, `companies/${companyId}/settings`, 'general'), cleanedSettings, { merge: true });
+      
+      // Atualizar cache Redis de configurações com os novos valores
+      try {
+        const updateCache = httpsCallable(functions, 'updateSettingsCache');
+        await updateCache({ companyId });
+        console.log('[Configurações] Cache Redis atualizado com novos valores');
+      } catch (error) {
+        console.warn('[Configurações] Erro ao atualizar cache (não crítico):', error);
+        // Não bloquear o salvamento se falhar
+      }
       
       // Atualizar documento da empresa com tipo de estabelecimento e logo
       const companyUpdates: any = {
@@ -2086,75 +2241,574 @@ export default function SettingsPage() {
                     Horário de Funcionamento
                   </CardTitle>
                   <CardDescription className={cn(subtleTextClass)}>
-                    Configure os horários disponíveis para agendamentos e os dias em que a equipe atende.
+                    Configure os horários disponíveis para agendamentos por dia, intervalos e bloqueios.
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="grid grid-cols-1 gap-6 md:grid-cols-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="horario-inicio">Horário de abertura</Label>
-                    <Input
-                      id="horario-inicio"
-                      type="time"
-                      value={settings.horarioFuncionamento.inicio}
-                      onChange={(e) => setSettings(prev => ({ 
-                        ...prev, 
-                        horarioFuncionamento: { ...prev.horarioFuncionamento, inicio: e.target.value }
-                      }))}
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="horario-fim">Horário de fechamento</Label>
-                    <Input
-                      id="horario-fim"
-                      type="time"
-                      value={settings.horarioFuncionamento.fim}
-                      onChange={(e) => setSettings(prev => ({ 
-                        ...prev, 
-                        horarioFuncionamento: { ...prev.horarioFuncionamento, fim: e.target.value }
-                      }))}
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label>Dias da semana</Label>
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <CardContent className="space-y-6">
+                  {/* Horários por Dia */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-base font-semibold">Horários por Dia</Label>
+                    </div>
+                    <div className="space-y-3">
                       {diasSemana.map(dia => {
-                        const checkboxId = `dia-${dia.value}`;
+                        const horarioDia = settings.horarioFuncionamento.horariosPorDia?.find(h => h.diaSemana === dia.value);
+                        const isAtivo = horarioDia?.ativo ?? false;
+                        
                         return (
-                          <div key={dia.value} className="flex items-center gap-2 rounded-md border border-input/60 bg-muted/30 px-3 py-2">
-                            <input
-                              id={checkboxId}
-                              type="checkbox"
-                              checked={settings.horarioFuncionamento.diasSemana.includes(dia.value)}
-                              onChange={(e) => {
-                                const dias = settings.horarioFuncionamento.diasSemana;
-                                if (e.target.checked) {
-                              setSettings(prev => ({
-                                ...prev,
-                                horarioFuncionamento: {
-                                  ...prev.horarioFuncionamento,
-                                  diasSemana: [...dias, dia.value].sort((a, b) => a - b)
-                                }
-                              }));
-                                } else {
-                                  setSettings(prev => ({
-                                    ...prev,
-                                    horarioFuncionamento: {
-                                      ...prev.horarioFuncionamento,
-                                      diasSemana: dias.filter(d => d !== dia.value)
+                          <div key={dia.value} className="flex items-center gap-4 rounded-lg border border-input/60 bg-muted/30 p-4">
+                            <div className="flex items-center gap-2 min-w-[120px]">
+                              <input
+                                type="checkbox"
+                                checked={isAtivo}
+                                onChange={(e) => {
+                                  setSettings(prev => {
+                                    const horariosPorDia = prev.horarioFuncionamento.horariosPorDia || [];
+                                    const index = horariosPorDia.findIndex(h => h.diaSemana === dia.value);
+                                    
+                                    if (e.target.checked) {
+                                      // Adicionar ou ativar horário
+                                      if (index >= 0) {
+                                        const updated = [...horariosPorDia];
+                                        updated[index] = { ...updated[index], ativo: true };
+                                        return {
+                                          ...prev,
+                                          horarioFuncionamento: {
+                                            ...prev.horarioFuncionamento,
+                                            horariosPorDia: updated
+                                          }
+                                        };
+                                      } else {
+                                        return {
+                                          ...prev,
+                                          horarioFuncionamento: {
+                                            ...prev.horarioFuncionamento,
+                                            horariosPorDia: [
+                                              ...horariosPorDia,
+                                              { diaSemana: dia.value, inicio: '08:00', fim: '18:00', ativo: true }
+                                            ]
+                                          }
+                                        };
+                                      }
+                                    } else {
+                                      // Desativar horário
+                                      if (index >= 0) {
+                                        const updated = [...horariosPorDia];
+                                        updated[index] = { ...updated[index], ativo: false };
+                                        return {
+                                          ...prev,
+                                          horarioFuncionamento: {
+                                            ...prev.horarioFuncionamento,
+                                            horariosPorDia: updated
+                                          }
+                                        };
+                                      }
+                                      return prev;
                                     }
-                                  }));
-                                }
-                              }}
-                              className="h-4 w-4 rounded border border-input bg-background text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                            />
-                            <Label htmlFor={checkboxId} className="text-sm font-normal text-foreground">
-                              {dia.label}
-                            </Label>
+                                  });
+                                }}
+                                className="h-4 w-4 rounded border border-input bg-background text-primary"
+                              />
+                              <Label className="text-sm font-medium min-w-[100px]">{dia.label}</Label>
+                            </div>
+                            
+                            {isAtivo && (
+                              <>
+                                <div className="flex-1 grid grid-cols-2 gap-3">
+                                  <div className="space-y-1">
+                                    <Label htmlFor={`horario-inicio-${dia.value}`} className="text-xs">Início</Label>
+                                    <Input
+                                      id={`horario-inicio-${dia.value}`}
+                                      type="time"
+                                      value={horarioDia?.inicio || '08:00'}
+                                      onChange={(e) => {
+                                        setSettings(prev => {
+                                          const horariosPorDia = prev.horarioFuncionamento.horariosPorDia || [];
+                                          const index = horariosPorDia.findIndex(h => h.diaSemana === dia.value);
+                                          
+                                          if (index >= 0) {
+                                            const updated = [...horariosPorDia];
+                                            updated[index] = { ...updated[index], inicio: e.target.value };
+                                            return {
+                                              ...prev,
+                                              horarioFuncionamento: {
+                                                ...prev.horarioFuncionamento,
+                                                horariosPorDia: updated
+                                              }
+                                            };
+                                          }
+                                          return prev;
+                                        });
+                                      }}
+                                      className="text-sm"
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <Label htmlFor={`horario-fim-${dia.value}`} className="text-xs">Fim</Label>
+                                    <Input
+                                      id={`horario-fim-${dia.value}`}
+                                      type="time"
+                                      value={horarioDia?.fim || '18:00'}
+                                      onChange={(e) => {
+                                        setSettings(prev => {
+                                          const horariosPorDia = prev.horarioFuncionamento.horariosPorDia || [];
+                                          const index = horariosPorDia.findIndex(h => h.diaSemana === dia.value);
+                                          
+                                          if (index >= 0) {
+                                            const updated = [...horariosPorDia];
+                                            updated[index] = { ...updated[index], fim: e.target.value };
+                                            return {
+                                              ...prev,
+                                              horarioFuncionamento: {
+                                                ...prev.horarioFuncionamento,
+                                                horariosPorDia: updated
+                                              }
+                                            };
+                                          }
+                                          return prev;
+                                        });
+                                      }}
+                                      className="text-sm"
+                                    />
+                                  </div>
+                                </div>
+                              </>
+                            )}
                           </div>
                         );
                       })}
+                    </div>
+                  </div>
+
+                  {/* Intervalos */}
+                  <div className="space-y-4 border-t pt-4">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-base font-semibold">Intervalos</Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSettings(prev => {
+                            const intervalos = prev.horarioFuncionamento.intervalos || [];
+                            const novoIntervalo: Intervalo = {
+                              id: Date.now().toString(),
+                              diaSemana: 1,
+                              inicio: '12:00',
+                              fim: '13:00',
+                              descricao: 'Almoço'
+                            };
+                            return {
+                              ...prev,
+                              horarioFuncionamento: {
+                                ...prev.horarioFuncionamento,
+                                intervalos: [...intervalos, novoIntervalo]
+                              }
+                            };
+                          });
+                        }}
+                        className="flex items-center gap-2"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Adicionar Intervalo
+                      </Button>
+                    </div>
+                    <div className="space-y-3">
+                      {settings.horarioFuncionamento.intervalos?.map((intervalo, index) => (
+                        <div key={intervalo.id} className="flex items-center gap-3 rounded-lg border border-input/60 bg-muted/30 p-4">
+                          <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-3">
+                            <div className="space-y-1">
+                              <Label className="text-xs">Dia da Semana</Label>
+                              <select
+                                value={intervalo.diaSemana}
+                                onChange={(e) => {
+                                  setSettings(prev => {
+                                    const intervalos = prev.horarioFuncionamento.intervalos || [];
+                                    const updated = [...intervalos];
+                                    updated[index] = { ...updated[index], diaSemana: parseInt(e.target.value) };
+                                    return {
+                                      ...prev,
+                                      horarioFuncionamento: {
+                                        ...prev.horarioFuncionamento,
+                                        intervalos: updated
+                                      }
+                                    };
+                                  });
+                                }}
+                                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                              >
+                                {diasSemana.map(dia => (
+                                  <option key={dia.value} value={dia.value}>{dia.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Início</Label>
+                              <Input
+                                type="time"
+                                value={intervalo.inicio}
+                                onChange={(e) => {
+                                  setSettings(prev => {
+                                    const intervalos = prev.horarioFuncionamento.intervalos || [];
+                                    const updated = [...intervalos];
+                                    updated[index] = { ...updated[index], inicio: e.target.value };
+                                    return {
+                                      ...prev,
+                                      horarioFuncionamento: {
+                                        ...prev.horarioFuncionamento,
+                                        intervalos: updated
+                                      }
+                                    };
+                                  });
+                                }}
+                                className="text-sm"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Fim</Label>
+                              <Input
+                                type="time"
+                                value={intervalo.fim}
+                                onChange={(e) => {
+                                  setSettings(prev => {
+                                    const intervalos = prev.horarioFuncionamento.intervalos || [];
+                                    const updated = [...intervalos];
+                                    updated[index] = { ...updated[index], fim: e.target.value };
+                                    return {
+                                      ...prev,
+                                      horarioFuncionamento: {
+                                        ...prev.horarioFuncionamento,
+                                        intervalos: updated
+                                      }
+                                    };
+                                  });
+                                }}
+                                className="text-sm"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Descrição (opcional)</Label>
+                              <Input
+                                type="text"
+                                placeholder="Ex: Almoço"
+                                value={intervalo.descricao || ''}
+                                onChange={(e) => {
+                                  setSettings(prev => {
+                                    const intervalos = prev.horarioFuncionamento.intervalos || [];
+                                    const updated = [...intervalos];
+                                    updated[index] = { ...updated[index], descricao: e.target.value };
+                                    return {
+                                      ...prev,
+                                      horarioFuncionamento: {
+                                        ...prev.horarioFuncionamento,
+                                        intervalos: updated
+                                      }
+                                    };
+                                  });
+                                }}
+                                className="text-sm"
+                              />
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setSettings(prev => {
+                                const intervalos = prev.horarioFuncionamento.intervalos || [];
+                                return {
+                                  ...prev,
+                                  horarioFuncionamento: {
+                                    ...prev.horarioFuncionamento,
+                                    intervalos: intervalos.filter((_, i) => i !== index)
+                                  }
+                                };
+                              });
+                            }}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                      {(!settings.horarioFuncionamento.intervalos || settings.horarioFuncionamento.intervalos.length === 0) && (
+                        <p className={cn('text-sm text-center py-4', subtleTextClass)}>
+                          Nenhum intervalo configurado. Clique em "Adicionar Intervalo" para criar um.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Bloqueios */}
+                  <div className="space-y-4 border-t pt-4">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-base font-semibold">Bloqueios</Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSettings(prev => {
+                            const bloqueios = prev.horarioFuncionamento.bloqueios || [];
+                            const novoBloqueio: Bloqueio = {
+                              id: Date.now().toString(),
+                              tipo: 'semanal',
+                              diaSemana: 3,
+                              inicio: '08:00',
+                              fim: '12:00',
+                              descricao: 'Reunião',
+                              ativo: true
+                            };
+                            return {
+                              ...prev,
+                              horarioFuncionamento: {
+                                ...prev.horarioFuncionamento,
+                                bloqueios: [...bloqueios, novoBloqueio]
+                              }
+                            };
+                          });
+                        }}
+                        className="flex items-center gap-2"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Adicionar Bloqueio
+                      </Button>
+                    </div>
+                    <div className="space-y-3">
+                      {settings.horarioFuncionamento.bloqueios?.map((bloqueio, index) => (
+                        <div key={bloqueio.id} className="rounded-lg border border-input/60 bg-muted/30 p-4 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={bloqueio.ativo}
+                                onChange={(e) => {
+                                  setSettings(prev => {
+                                    const bloqueios = prev.horarioFuncionamento.bloqueios || [];
+                                    const updated = [...bloqueios];
+                                    updated[index] = { ...updated[index], ativo: e.target.checked };
+                                    return {
+                                      ...prev,
+                                      horarioFuncionamento: {
+                                        ...prev.horarioFuncionamento,
+                                        bloqueios: updated
+                                      }
+                                    };
+                                  });
+                                }}
+                                className="h-4 w-4 rounded border border-input bg-background text-primary"
+                              />
+                              <Label className="text-sm font-medium">Ativo</Label>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSettings(prev => {
+                                  const bloqueios = prev.horarioFuncionamento.bloqueios || [];
+                                  return {
+                                    ...prev,
+                                    horarioFuncionamento: {
+                                      ...prev.horarioFuncionamento,
+                                      bloqueios: bloqueios.filter((_, i) => i !== index)
+                                    }
+                                  };
+                                });
+                              }}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <Label className="text-xs">Tipo de Recorrência</Label>
+                              <select
+                                value={bloqueio.tipo}
+                                onChange={(e) => {
+                                  setSettings(prev => {
+                                    const bloqueios = prev.horarioFuncionamento.bloqueios || [];
+                                    const updated = [...bloqueios];
+                                    updated[index] = { 
+                                      ...updated[index], 
+                                      tipo: e.target.value as 'semanal' | 'mensal' | 'data_especifica',
+                                      // Limpar campos não relevantes
+                                      ...(e.target.value === 'semanal' ? { diaMes: undefined, dataEspecifica: undefined } : {}),
+                                      ...(e.target.value === 'mensal' ? { diaSemana: undefined, dataEspecifica: undefined } : {}),
+                                      ...(e.target.value === 'data_especifica' ? { diaSemana: undefined, diaMes: undefined } : {})
+                                    };
+                                    return {
+                                      ...prev,
+                                      horarioFuncionamento: {
+                                        ...prev.horarioFuncionamento,
+                                        bloqueios: updated
+                                      }
+                                    };
+                                  });
+                                }}
+                                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                              >
+                                <option value="semanal">Semanal (toda semana no mesmo dia)</option>
+                                <option value="mensal">Mensal (todo mês no mesmo dia)</option>
+                                <option value="data_especifica">Data Específica</option>
+                              </select>
+                            </div>
+                            {bloqueio.tipo === 'semanal' && (
+                              <div className="space-y-1">
+                                <Label className="text-xs">Dia da Semana</Label>
+                                <select
+                                  value={bloqueio.diaSemana || 0}
+                                  onChange={(e) => {
+                                    setSettings(prev => {
+                                      const bloqueios = prev.horarioFuncionamento.bloqueios || [];
+                                      const updated = [...bloqueios];
+                                      updated[index] = { ...updated[index], diaSemana: parseInt(e.target.value) };
+                                      return {
+                                        ...prev,
+                                        horarioFuncionamento: {
+                                          ...prev.horarioFuncionamento,
+                                          bloqueios: updated
+                                        }
+                                      };
+                                    });
+                                  }}
+                                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                >
+                                  {diasSemana.map(dia => (
+                                    <option key={dia.value} value={dia.value}>{dia.label}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+                            {bloqueio.tipo === 'mensal' && (
+                              <div className="space-y-1">
+                                <Label className="text-xs">Dia do Mês (1-31)</Label>
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  max="31"
+                                  value={bloqueio.diaMes || ''}
+                                  onChange={(e) => {
+                                    setSettings(prev => {
+                                      const bloqueios = prev.horarioFuncionamento.bloqueios || [];
+                                      const updated = [...bloqueios];
+                                      updated[index] = { ...updated[index], diaMes: parseInt(e.target.value) };
+                                      return {
+                                        ...prev,
+                                        horarioFuncionamento: {
+                                          ...prev.horarioFuncionamento,
+                                          bloqueios: updated
+                                        }
+                                      };
+                                    });
+                                  }}
+                                  className="text-sm"
+                                />
+                              </div>
+                            )}
+                            {bloqueio.tipo === 'data_especifica' && (
+                              <div className="space-y-1">
+                                <Label className="text-xs">Data Específica</Label>
+                                <Input
+                                  type="date"
+                                  value={bloqueio.dataEspecifica || ''}
+                                  onChange={(e) => {
+                                    setSettings(prev => {
+                                      const bloqueios = prev.horarioFuncionamento.bloqueios || [];
+                                      const updated = [...bloqueios];
+                                      updated[index] = { ...updated[index], dataEspecifica: e.target.value };
+                                      return {
+                                        ...prev,
+                                        horarioFuncionamento: {
+                                          ...prev.horarioFuncionamento,
+                                          bloqueios: updated
+                                        }
+                                      };
+                                    });
+                                  }}
+                                  className="text-sm"
+                                />
+                              </div>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div className="space-y-1">
+                              <Label className="text-xs">Horário Início</Label>
+                              <Input
+                                type="time"
+                                value={bloqueio.inicio}
+                                onChange={(e) => {
+                                  setSettings(prev => {
+                                    const bloqueios = prev.horarioFuncionamento.bloqueios || [];
+                                    const updated = [...bloqueios];
+                                    updated[index] = { ...updated[index], inicio: e.target.value };
+                                    return {
+                                      ...prev,
+                                      horarioFuncionamento: {
+                                        ...prev.horarioFuncionamento,
+                                        bloqueios: updated
+                                      }
+                                    };
+                                  });
+                                }}
+                                className="text-sm"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Horário Fim</Label>
+                              <Input
+                                type="time"
+                                value={bloqueio.fim}
+                                onChange={(e) => {
+                                  setSettings(prev => {
+                                    const bloqueios = prev.horarioFuncionamento.bloqueios || [];
+                                    const updated = [...bloqueios];
+                                    updated[index] = { ...updated[index], fim: e.target.value };
+                                    return {
+                                      ...prev,
+                                      horarioFuncionamento: {
+                                        ...prev.horarioFuncionamento,
+                                        bloqueios: updated
+                                      }
+                                    };
+                                  });
+                                }}
+                                className="text-sm"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Descrição (opcional)</Label>
+                              <Input
+                                type="text"
+                                placeholder="Ex: Reunião, Manutenção"
+                                value={bloqueio.descricao || ''}
+                                onChange={(e) => {
+                                  setSettings(prev => {
+                                    const bloqueios = prev.horarioFuncionamento.bloqueios || [];
+                                    const updated = [...bloqueios];
+                                    updated[index] = { ...updated[index], descricao: e.target.value };
+                                    return {
+                                      ...prev,
+                                      horarioFuncionamento: {
+                                        ...prev.horarioFuncionamento,
+                                        bloqueios: updated
+                                      }
+                                    };
+                                  });
+                                }}
+                                className="text-sm"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {(!settings.horarioFuncionamento.bloqueios || settings.horarioFuncionamento.bloqueios.length === 0) && (
+                        <p className={cn('text-sm text-center py-4', subtleTextClass)}>
+                          Nenhum bloqueio configurado. Clique em "Adicionar Bloqueio" para criar um.
+                        </p>
+                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -2327,122 +2981,328 @@ export default function SettingsPage() {
                       )}
                     </div>
 
-                    {/* Aviso para salvar configurações */}
-                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/30">
-                      <div className="flex items-start gap-2">
-                        <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                            ⚠️ Lembre-se de salvar as configurações
-                          </p>
-                          <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
-                            Após alterar o provedor, tipo de WhatsApp ou número, clique no botão "Salvar Configurações" no final da página para aplicar as mudanças.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="whatsapp-provider">Provedor de envio</Label>
-                        <select
-                          id="whatsapp-provider"
-                          value={settings.whatsappProvider}
-                          onChange={(e) => {
-                            const provider = e.target.value as SettingsData['whatsappProvider'];
-                            setSettings(prev => ({
-                              ...prev,
-                              whatsappProvider: provider,
-                              // Resetar tipo de integração quando mudar o provider
-                              whatsappIntegrationType: provider === 'evolution' ? undefined : prev.whatsappIntegrationType,
-                            }));
-                          }}
-                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                        >
-                          <option value="disabled">Desabilitado</option>
-                          <option value="evolution">Evolution API (número próprio)</option>
-                        </select>
-                        <p className={cn('text-sm', subtleTextClass)}>
-                          {settings.whatsappProvider === 'disabled' 
-                            ? 'Quando desabilitado, nenhuma mensagem será enviada automaticamente via WhatsApp.'
-                            : 'Evolution API utiliza o WhatsApp Web do número configurado e é recomendado para produção.'}
-                        </p>
-                      </div>
-
-                      {settings.whatsappProvider === 'evolution' && (
-                        <div className="space-y-2">
-                          <Label htmlFor="whatsapp-integration-type">
-                            Tipo de WhatsApp <span className="text-destructive">*</span>
-                          </Label>
-                          <select
-                            id="whatsapp-integration-type"
-                            value={settings.whatsappIntegrationType || ''}
-                            onChange={(e) => {
-                              const value = e.target.value;
-                              const integrationType = value ? (value as SettingsData['whatsappIntegrationType']) : undefined;
-                              setSettings(prev => ({
-                                ...prev,
-                                whatsappIntegrationType: integrationType,
-                              }));
-                              // Limpar QR code antigo quando o tipo mudar
-                              if (evolutionStatus?.qrCode) {
-                                // O QR code será limpo automaticamente quando o usuário gerar um novo
-                                // Mas não vamos exibir o antigo enquanto muda o tipo
-                              }
-                            }}
-                            required
-                            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                          >
-                            <option value="">Selecione o tipo de WhatsApp...</option>
-                            <option value="WHATSAPP-BAILEYS">WhatsApp do Celular (Baileys) - Usa QR Code</option>
-                            <option value="WHATSAPP-BUSINESS">WhatsApp Business - API Oficial Meta (Token)</option>
-                          </select>
-            <p className={cn('text-sm', subtleTextClass)}>
-              {!settings.whatsappIntegrationType
-                ? '⚠️ Selecione o tipo de WhatsApp antes de gerar o QR Code.'
-                : settings.whatsappIntegrationType === 'WHATSAPP-BAILEYS'
-                ? 'WhatsApp do Celular usa QR Code para pareamento. Escaneie o QR Code com seu WhatsApp.'
-                : '⚠️ WhatsApp Business usa a API oficial do Meta e requer token/credenciais. Não usa QR Code. Configure as credenciais no Meta Business Manager.'}
-            </p>
-                        </div>
-                      )}
-
-                      {settings.whatsappProvider === 'evolution' && (
-                        <div className="space-y-2">
-                          <Label htmlFor="whatsapp-number">
-                            Número do WhatsApp <span className="text-destructive">*</span>
-                          </Label>
-                          <Input
-                            id="whatsapp-number"
-                            type="tel"
-                            placeholder="5599999999999"
-                            value={settings.whatsappNumber || ''}
-                            onChange={(e) => {
-                              // Remover caracteres não numéricos
-                              const value = e.target.value.replace(/\D/g, '');
-                              setSettings(prev => ({
-                                ...prev,
-                                whatsappNumber: value,
-                              }));
-                              // Limpar QR code antigo quando o número mudar
-                              if (evolutionStatus?.qrCode) {
-                                // O QR code será limpo automaticamente quando o usuário gerar um novo
-                                // Mas não vamos exibir o antigo enquanto digita
-                              }
-                            }}
-                            required
-                            className="w-full"
-                          />
-                          <p className={cn('text-sm', subtleTextClass)}>
-                            Digite o número com código do país (ex: 5599999999999). Apenas números.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-
-
-                  {settings.whatsappProvider === 'evolution' && (
+                    {/* Se já está conectado, mostrar apenas a seção de status (sem os campos de configuração) */}
+                    {evolutionStatus?.status === 'connected' && settings.whatsappProvider === 'evolution' ? (
                       <div className="space-y-4 rounded-lg border border-input/60 bg-muted/10 p-4">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <p className="text-sm font-medium">
+                            Status Evolution: <span className="font-semibold text-primary">{evolutionStatusLabel}</span>
+                          </p>
+                          {formatTimestamp(evolutionStatus?.updatedAt) && (
+                            <span className={cn('text-xs', subtleTextClass)}>
+                              Atualizado em {formatTimestamp(evolutionStatus?.updatedAt)}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Mostrar mensagem quando estiver conectado */}
+                        <div className={cn('rounded-lg border border-emerald-500/30 bg-emerald-50/50 p-4 text-center', subtleTextClass)}>
+                          <p className="text-sm font-medium text-emerald-700">
+                            ✅ WhatsApp conectado com sucesso!
+                          </p>
+                          <p className="text-xs text-emerald-600 mt-1">
+                            Você pode enviar e receber mensagens normalmente.
+                          </p>
+                        </div>
+
+                        <div className={cn('grid gap-2 text-xs md:grid-cols-2', subtleTextClass)}>
+                          {evolutionStatus?.lastMessageAt && (
+                            <p>
+                              Último envio: {formatTimestamp(evolutionStatus.lastMessageAt)}
+                            </p>
+                          )}
+                          {!evolutionStatus?.lastMessageAt && evolutionStatus?.lastConnectedAt && (
+                            <p>
+                              Última conexão: {formatTimestamp(evolutionStatus.lastConnectedAt)}
+                            </p>
+                          )}
+                          {evolutionStatus?.lastDisconnectReason && (
+                            <p className="text-destructive">
+                              Motivo da última desconexão: {evolutionStatus.lastDisconnectReason}
+                            </p>
+                          )}
+                          {evolutionStatus?.lastError && (
+                            <p className="text-destructive">
+                              Erro recente: {evolutionStatus.lastError}
+                            </p>
+                          )}
+                        </div>
+
+                        <CardFooter className="flex flex-wrap items-center gap-3 p-0 pt-2">
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              disabled={disconnecting}
+                              onClick={async () => {
+                                if (!companyId) return;
+                                if (!confirm('Tem certeza que deseja desconectar o WhatsApp? Isso irá:\n\n• Deletar a instância no Evolution API\n• Limpar todas as configurações do WhatsApp\n• Remover todas as mensagens do WhatsApp (whatsappMessages)\n• Remover todos os contatos do WhatsApp (whatsappContacts)\n• Limpar histórico de agendamentos pelo WhatsApp\n\n⚠️ Esta ação não pode ser desfeita!\n\nVocê precisará configurar novamente para usar o WhatsApp.')) {
+                                  return;
+                                }
+                                setDisconnecting(true);
+                                try {
+                                  const disconnectCallable = httpsCallable(functions, 'disconnectWhatsApp');
+                                  await disconnectCallable({ companyId });
+                                  alert('WhatsApp desconectado com sucesso! Todas as configurações foram limpas.');
+                                  // Recarregar a página para atualizar as configurações
+                                  window.location.reload();
+                                } catch (error: any) {
+                                  console.error('Erro ao desconectar WhatsApp:', error);
+                                  alert(`Erro ao desconectar WhatsApp: ${error?.message || 'Erro desconhecido'}`);
+                                  setDisconnecting(false);
+                                }
+                              }}
+                              className={cn(
+                                isVibrant
+                                  ? 'border-red-300 bg-red-500 text-white hover:bg-red-600 hover:border-red-400'
+                                  : ''
+                              )}
+                            >
+                              {disconnecting ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                  Desconectando...
+                                </>
+                              ) : (
+                                <>
+                                  <X className="w-4 h-4 mr-2" />
+                                  Desconectar
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </CardFooter>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Aviso para salvar configurações */}
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/30">
+                          <div className="flex items-start gap-2">
+                            <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+                            <div className="flex-1">
+                              <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                                ⚠️ Lembre-se de salvar as configurações
+                              </p>
+                              <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                                Após alterar o provedor, tipo de WhatsApp ou número, clique no botão "Salvar Configurações" no final da página para aplicar as mudanças.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label htmlFor="whatsapp-provider">Provedor de envio</Label>
+                            <select
+                              id="whatsapp-provider"
+                              value={settings.whatsappProvider}
+                              onChange={(e) => {
+                                const provider = e.target.value as SettingsData['whatsappProvider'];
+                                setSettings(prev => ({
+                                  ...prev,
+                                  whatsappProvider: provider,
+                                  // Resetar tipo de integração quando mudar o provider
+                                  whatsappIntegrationType: provider === 'evolution' ? undefined : prev.whatsappIntegrationType,
+                                }));
+                              }}
+                              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                            >
+                              <option value="disabled">Desabilitado</option>
+                              <option value="evolution">Evolution API (número próprio)</option>
+                            </select>
+                            <p className={cn('text-sm', subtleTextClass)}>
+                              {settings.whatsappProvider === 'disabled' 
+                                ? 'Quando desabilitado, nenhuma mensagem será enviada automaticamente via WhatsApp.'
+                                : 'Evolution API utiliza o WhatsApp Web do número configurado e é recomendado para produção.'}
+                            </p>
+                          </div>
+
+                          {settings.whatsappProvider === 'evolution' && (
+                            <div className="space-y-2">
+                              <Label htmlFor="whatsapp-integration-type">
+                                Tipo de WhatsApp <span className="text-destructive">*</span>
+                              </Label>
+                              <select
+                                id="whatsapp-integration-type"
+                                value={settings.whatsappIntegrationType || ''}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  const integrationType = value ? (value as SettingsData['whatsappIntegrationType']) : undefined;
+                                  setSettings(prev => ({
+                                    ...prev,
+                                    whatsappIntegrationType: integrationType,
+                                  }));
+                                  // Limpar QR code antigo quando o tipo mudar
+                                  if (evolutionStatus?.qrCode) {
+                                    // O QR code será limpo automaticamente quando o usuário gerar um novo
+                                    // Mas não vamos exibir o antigo enquanto muda o tipo
+                                  }
+                                }}
+                                required
+                                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                              >
+                                <option value="">Selecione o tipo de WhatsApp...</option>
+                                <option value="WHATSAPP-BAILEYS">WhatsApp do Celular (Baileys) - Usa QR Code</option>
+                                <option value="WHATSAPP-BUSINESS">WhatsApp Business - API Oficial Meta (Token)</option>
+                              </select>
+                              <p className={cn('text-sm', subtleTextClass)}>
+                                {!settings.whatsappIntegrationType
+                                  ? '⚠️ Selecione o tipo de WhatsApp antes de gerar o QR Code.'
+                                  : settings.whatsappIntegrationType === 'WHATSAPP-BAILEYS'
+                                  ? 'WhatsApp do Celular usa QR Code para pareamento. Escaneie o QR Code com seu WhatsApp.'
+                                  : '⚠️ WhatsApp Business usa a API oficial do Meta e requer token/credenciais. Não usa QR Code. Configure as credenciais no Meta Business Manager.'}
+                              </p>
+                            </div>
+                          )}
+
+                          {settings.whatsappProvider === 'evolution' && (
+                            <div className="space-y-2">
+                              <Label htmlFor="whatsapp-number">
+                                Número do WhatsApp <span className="text-destructive">*</span>
+                              </Label>
+                              <Input
+                                id="whatsapp-number"
+                                type="tel"
+                                placeholder="5599999999999"
+                                value={settings.whatsappNumber || ''}
+                                onChange={(e) => {
+                                  // Remover caracteres não numéricos
+                                  const value = e.target.value.replace(/\D/g, '');
+                                  setSettings(prev => ({
+                                    ...prev,
+                                    whatsappNumber: value,
+                                  }));
+                                  // Limpar QR code antigo quando o número mudar
+                                  if (evolutionStatus?.qrCode) {
+                                    // O QR code será limpo automaticamente quando o usuário gerar um novo
+                                    // Mas não vamos exibir o antigo enquanto digita
+                                  }
+                                }}
+                                required
+                                className="w-full"
+                              />
+                              <p className={cn('text-sm', subtleTextClass)}>
+                                Digite o número com código do país (ex: 5599999999999). Apenas números.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+
+                    {/* Configurações de Agendamento pelo WhatsApp */}
+                    <div className="space-y-4 rounded-lg border border-dashed border-primary/40 bg-primary/5 p-4">
+                      <div className="flex flex-col gap-2">
+                        <div>
+                          <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+                            <Calendar className="h-4 w-4" />
+                            Agendamento pelo WhatsApp
+                          </h3>
+                          <p className={cn('text-sm mt-1', subtleTextClass)}>
+                            Permita que {settings.customerLabel === 'paciente' ? 'pacientes' : 'clientes'} agendem diretamente pelo WhatsApp.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        <label className="flex items-start gap-3 rounded-lg border border-input/60 bg-muted/20 p-4 transition hover:border-primary cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={settings.agendamentoWhatsappHabilitado || false}
+                            onChange={(e) => setSettings(prev => ({ 
+                              ...prev, 
+                              agendamentoWhatsappHabilitado: e.target.checked,
+                              // Se desabilitar, também desabilitar a restrição de contatos
+                              ...(e.target.checked ? {} : { agendamentoWhatsappApenasContatos: false })
+                            }))}
+                            className="mt-1 h-4 w-4 rounded border border-input bg-background text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                          />
+                          <div className="space-y-1 flex-1">
+                            <span className="text-sm font-medium text-foreground">Habilitar agendamento pelo WhatsApp</span>
+                            <p className={cn('text-sm', subtleTextClass)}>
+                              Quando habilitado, {settings.customerLabel === 'paciente' ? 'pacientes' : 'clientes'} poderão agendar consultas diretamente pelo WhatsApp através de um assistente inteligente.
+                            </p>
+                            {(!settings.whatsappProvider || settings.whatsappProvider === 'disabled') && (
+                              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                                ⚠️ É necessário configurar o provedor de WhatsApp acima para usar esta funcionalidade.
+                              </p>
+                            )}
+                          </div>
+                        </label>
+
+                        {settings.agendamentoWhatsappHabilitado && (
+                          <>
+                            <label className="flex items-start gap-3 rounded-lg border border-input/60 bg-muted/20 p-4 transition hover:border-primary cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={settings.agendamentoWhatsappApenasContatos || false}
+                                onChange={(e) => setSettings(prev => ({ 
+                                  ...prev, 
+                                  agendamentoWhatsappApenasContatos: e.target.checked
+                                }))}
+                                className="mt-1 h-4 w-4 rounded border border-input bg-background text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                              />
+                              <div className="space-y-1 flex-1">
+                                <span className="text-sm font-medium text-foreground">Apenas para contatos cadastrados</span>
+                                <p className={cn('text-sm', subtleTextClass)}>
+                                  Quando habilitado, apenas {settings.customerLabel === 'paciente' ? 'pacientes' : 'clientes'} já cadastrados no sistema poderão agendar pelo WhatsApp. Desabilitado, qualquer pessoa poderá agendar.
+                                </p>
+                              </div>
+                            </label>
+
+                            {/* Seleção de Serviços */}
+                            <div className="space-y-3 rounded-lg border border-input/60 bg-muted/20 p-4">
+                              <div className="space-y-2">
+                                <Label className="text-sm font-medium text-foreground">
+                                  Serviços disponíveis para agendamento
+                                </Label>
+                                <p className={cn('text-sm', subtleTextClass)}>
+                                  Escolha quais serviços estarão disponíveis para o cliente selecionar durante o agendamento pelo WhatsApp. Por padrão, todos os serviços ativos estarão disponíveis.
+                                </p>
+                              </div>
+
+                              {servicesLoading ? (
+                                <div className="flex items-center justify-center py-4">
+                                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                                  <span className={cn('ml-2 text-sm', subtleTextClass)}>Carregando serviços...</span>
+                                </div>
+                              ) : services.length === 0 ? (
+                                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/30">
+                                  <p className="text-sm text-amber-800 dark:text-amber-200">
+                                    ⚠️ Nenhum serviço cadastrado. Cadastre serviços na página de Serviços para disponibilizá-los no agendamento pelo WhatsApp.
+                                  </p>
+                                </div>
+                              ) : (
+                                <div className="space-y-3">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setShowServiceModal(true)}
+                                    className="w-full"
+                                  >
+                                    <Package className="w-4 h-4 mr-2" />
+                                    {(!settings.agendamentoWhatsappServicosIds || settings.agendamentoWhatsappServicosIds.length === 0)
+                                      ? 'Todos os serviços ativos (padrão)'
+                                      : `${settings.agendamentoWhatsappServicosIds.length} serviço${settings.agendamentoWhatsappServicosIds.length !== 1 ? 's' : ''} selecionado${settings.agendamentoWhatsappServicosIds.length !== 1 ? 's' : ''}`
+                                    }
+                                  </Button>
+                                  {settings.agendamentoWhatsappServicosIds && settings.agendamentoWhatsappServicosIds.length > 0 && (
+                                    <p className={cn('text-xs text-center', subtleTextClass)}>
+                                      Clique no botão acima para alterar a seleção de serviços
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                  {settings.whatsappProvider === 'evolution' && evolutionStatus?.status !== 'connected' && (
+                      <div className="space-y-4 rounded-lg border border-input/60 bg-muted/10 p-4">
+                        {/* Seção para quando não está conectado */}
                         {(!settings.whatsappIntegrationType || !settings.whatsappNumber || settings.whatsappNumber.replace(/\D/g, '').length < 10) ? (
                           <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/30">
                             <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
@@ -2765,57 +3625,51 @@ export default function SettingsPage() {
                             )}
                           </div>
                         )}
-                        
-                        {/* Mostrar mensagem quando estiver conectado */}
-                        {evolutionStatus?.status === 'connected' && (
-                          <div className={cn('rounded-lg border border-emerald-500/30 bg-emerald-50/50 p-4 text-center', subtleTextClass)}>
-                            <p className="text-sm font-medium text-emerald-700">
-                              ✅ WhatsApp conectado com sucesso!
-                            </p>
-                            <p className="text-xs text-emerald-600 mt-1">
-                              Você pode enviar e receber mensagens normalmente.
-                            </p>
+
+                        {/* Mostrar informações de status quando não estiver conectado, mas campos estiverem preenchidos */}
+                        {evolutionStatus?.status !== 'connected' && (
+                          <div className={cn('grid gap-2 text-xs md:grid-cols-2', subtleTextClass)}>
+                            {evolutionStatus?.lastMessageAt && (
+                              <p>
+                                Último envio: {formatTimestamp(evolutionStatus.lastMessageAt)}
+                              </p>
+                            )}
+                            {!evolutionStatus?.lastMessageAt && evolutionStatus?.lastConnectedAt && (
+                              <p>
+                                Última conexão: {formatTimestamp(evolutionStatus.lastConnectedAt)}
+                              </p>
+                            )}
+                            {evolutionStatus?.lastDisconnectReason && (
+                              <p className="text-destructive">
+                                Motivo da última desconexão: {evolutionStatus.lastDisconnectReason}
+                              </p>
+                            )}
+                            {evolutionStatus?.lastError && (
+                              <p className="text-destructive">
+                                Erro recente: {evolutionStatus.lastError}
+                              </p>
+                            )}
+                            {evolutionPairingError && (
+                              <p className="text-destructive">
+                                {evolutionPairingError}
+                              </p>
+                            )}
                           </div>
                         )}
 
-                        <div className={cn('grid gap-2 text-xs md:grid-cols-2', subtleTextClass)}>
-                          {evolutionStatus?.lastMessageAt && (
-                            <p>
-                              Último envio: {formatTimestamp(evolutionStatus.lastMessageAt)}
-                            </p>
-                          )}
-                          {!evolutionStatus?.lastMessageAt && evolutionStatus?.lastConnectedAt && (
-                            <p>
-                              Última conexão: {formatTimestamp(evolutionStatus.lastConnectedAt)}
-                            </p>
-                          )}
-                          {evolutionStatus?.lastDisconnectReason && (
-                            <p className="text-destructive">
-                              Motivo da última desconexão: {evolutionStatus.lastDisconnectReason}
-                            </p>
-                          )}
-                          {evolutionStatus?.lastError && (
-                            <p className="text-destructive">
-                              Erro recente: {evolutionStatus.lastError}
-                            </p>
-                          )}
-                          {evolutionPairingError && (
-                            <p className="text-destructive">
-                              {evolutionPairingError}
-                            </p>
-                          )}
-                        </div>
-
-                            <CardFooter className="flex flex-wrap items-center gap-3 p-0 pt-2">
-                              {(!settings.whatsappIntegrationType || !settings.whatsappNumber || settings.whatsappNumber.replace(/\D/g, '').length < 10) && (
-                                <p className="text-sm text-amber-600 dark:text-amber-400">
-                                  ⚠️ {!settings.whatsappIntegrationType 
-                                    ? 'Selecione o tipo de WhatsApp acima e salve as configurações antes de gerar o QR Code.'
-                                    : !settings.whatsappNumber || settings.whatsappNumber.replace(/\D/g, '').length < 10
-                                    ? 'Digite o número completo do WhatsApp acima e salve as configurações antes de gerar o QR Code.'
-                                    : 'Configure o WhatsApp acima antes de gerar o QR Code.'}
-                                </p>
-                              )}
+                        {/* CardFooter só aparece quando não está conectado */}
+                        {evolutionStatus?.status !== 'connected' && (
+                          <CardFooter className="flex flex-wrap items-center gap-3 p-0 pt-2">
+                            {(!settings.whatsappIntegrationType || !settings.whatsappNumber || settings.whatsappNumber.replace(/\D/g, '').length < 10) && (
+                              <p className="text-sm text-amber-600 dark:text-amber-400">
+                                ⚠️ {!settings.whatsappIntegrationType 
+                                  ? 'Selecione o tipo de WhatsApp acima e salve as configurações antes de gerar o QR Code.'
+                                  : !settings.whatsappNumber || settings.whatsappNumber.replace(/\D/g, '').length < 10
+                                  ? 'Digite o número completo do WhatsApp acima e salve as configurações antes de gerar o QR Code.'
+                                  : 'Configure o WhatsApp acima antes de gerar o QR Code.'}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-2">
                               <Button
                                 type="button"
                                 variant="outline"
@@ -2834,12 +3688,57 @@ export default function SettingsPage() {
                                   ? '⚠️ WhatsApp Business não usa QR Code'
                                   : 'Gerar/Atualizar QR Code'}
                               </Button>
-                              <span className={cn('text-xs', subtleTextClass)}>
-                                {settings.whatsappIntegrationType === 'WHATSAPP-BUSINESS'
-                                  ? 'WhatsApp Business usa API oficial do Meta e requer token/credenciais. Não usa QR Code.'
-                                  : 'Clique se o QR Code não aparecer ou estiver expirado.'}
-                              </span>
-                            </CardFooter>
+                              {(settings.whatsappProvider === 'evolution' && (settings.whatsappIntegrationType || settings.whatsappNumber)) && (
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="sm"
+                                  disabled={disconnecting}
+                                  onClick={async () => {
+                                    if (!companyId) return;
+                                    if (!confirm('Tem certeza que deseja desconectar o WhatsApp? Isso irá:\n\n• Deletar a instância no Evolution API\n• Limpar todas as configurações do WhatsApp\n• Remover todas as mensagens do WhatsApp (whatsappMessages)\n• Remover todos os contatos do WhatsApp (whatsappContacts)\n• Limpar histórico de agendamentos pelo WhatsApp\n\n⚠️ Esta ação não pode ser desfeita!\n\nVocê precisará configurar novamente para usar o WhatsApp.')) {
+                                      return;
+                                    }
+                                    setDisconnecting(true);
+                                    try {
+                                      const disconnectCallable = httpsCallable(functions, 'disconnectWhatsApp');
+                                      await disconnectCallable({ companyId });
+                                      alert('WhatsApp desconectado com sucesso! Todas as configurações foram limpas.');
+                                      // Recarregar a página para atualizar as configurações
+                                      window.location.reload();
+                                    } catch (error: any) {
+                                      console.error('Erro ao desconectar WhatsApp:', error);
+                                      alert(`Erro ao desconectar WhatsApp: ${error?.message || 'Erro desconhecido'}`);
+                                      setDisconnecting(false);
+                                    }
+                                  }}
+                                  className={cn(
+                                    isVibrant
+                                      ? 'border-red-300 bg-red-500 text-white hover:bg-red-600 hover:border-red-400'
+                                      : ''
+                                  )}
+                                >
+                                  {disconnecting ? (
+                                    <>
+                                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                      Desconectando...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <X className="w-4 h-4 mr-2" />
+                                      Desconectar
+                                    </>
+                                  )}
+                                </Button>
+                              )}
+                            </div>
+                            <span className={cn('text-xs', subtleTextClass)}>
+                              {settings.whatsappIntegrationType === 'WHATSAPP-BUSINESS'
+                                ? 'WhatsApp Business usa API oficial do Meta e requer token/credenciais. Não usa QR Code.'
+                                : 'Clique se o QR Code não aparecer ou estiver expirado.'}
+                            </span>
+                          </CardFooter>
+                        )}
                           </>
                         )}
                       </div>
@@ -3515,6 +4414,218 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* Modal Seleção de Serviços */}
+      {showServiceModal && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className={cn(
+            'fixed inset-0 z-[70] flex items-start justify-center p-4 pt-8 sm:pt-16 backdrop-blur-sm overflow-y-auto',
+            isVibrant ? 'bg-slate-900/60 backdrop-blur-xl' : 'bg-black/50'
+          )}
+          onClick={() => setShowServiceModal(false)}
+        >
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            onClick={(e) => e.stopPropagation()}
+            className={cn(
+              'w-full max-w-lg rounded-2xl border shadow-2xl flex flex-col max-h-[85vh] mt-0',
+              isVibrant ? 'bg-white/95 border-white/25 backdrop-blur-2xl' : 'bg-white border-slate-200'
+            )}
+          >
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="text-lg font-bold text-slate-900">Selecionar Serviços</h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowServiceModal(false)}
+                className={cn(isVibrant ? 'text-slate-600 hover:bg-white/40' : '')}
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+
+            <div className="p-4 border-b">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+                <Input
+                  type="text"
+                  value={serviceQuery}
+                  onChange={(e) => setServiceQuery(e.target.value)}
+                  placeholder="Buscar serviço por nome"
+                  className="pl-10 pr-4 py-3 text-base"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-2">
+              {servicesLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                  <span className={cn('ml-2 text-sm', subtleTextClass)}>Carregando serviços...</span>
+                </div>
+              ) : services.filter(s => s.ativo).length === 0 ? (
+                <div className="text-center py-12 px-4">
+                  <div className={cn(
+                    'mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full',
+                    isVibrant
+                      ? 'bg-indigo-100 text-indigo-600'
+                      : 'bg-blue-100 text-blue-600'
+                  )}>
+                    <Package className="w-8 h-8" />
+                  </div>
+                  <h3 className={cn(
+                    'text-lg font-semibold mb-2',
+                    isVibrant ? 'text-slate-900' : 'text-gray-900'
+                  )}>
+                    Nenhum serviço ativo
+                  </h3>
+                  <p className={cn(
+                    'text-sm',
+                    isVibrant ? 'text-slate-600' : 'text-gray-600'
+                  )}>
+                    Não há serviços ativos cadastrados.
+                  </p>
+                </div>
+              ) : (() => {
+                const filteredServices = services.filter(service => 
+                  service.ativo && 
+                  service.nome.toLowerCase().includes(serviceQuery.toLowerCase())
+                );
+                
+                return filteredServices.length === 0 ? (
+                  <div className="text-center py-12">
+                    <p className="text-slate-500">Nenhum serviço encontrado para "{serviceQuery}"</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {filteredServices.map((service) => {
+                      const currentIds = settings.agendamentoWhatsappServicosIds || [];
+                      const isSelected = currentIds.includes(service.id);
+                      
+                      return (
+                        <label
+                          key={service.id}
+                          className={cn(
+                            'w-full text-left px-4 py-3 rounded-lg transition-all cursor-pointer',
+                            'flex items-center gap-3',
+                            isSelected
+                              ? isVibrant
+                                ? 'bg-indigo-500/20 border-2 border-indigo-500'
+                                : 'bg-blue-50 border-2 border-blue-500'
+                              : isVibrant
+                              ? 'hover:bg-white/60 border border-transparent hover:border-white/30'
+                              : 'hover:bg-slate-50 border border-transparent hover:border-slate-200'
+                          )}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              const currentIds = settings.agendamentoWhatsappServicosIds || [];
+                              if (e.target.checked) {
+                                // Adicionar serviço
+                                setSettings(prev => ({
+                                  ...prev,
+                                  agendamentoWhatsappServicosIds: [...currentIds, service.id]
+                                }));
+                              } else {
+                                // Remover serviço
+                                const newIds = currentIds.filter(id => id !== service.id);
+                                // Se não sobrou nenhum, voltar para "todos" (array vazio)
+                                setSettings(prev => ({
+                                  ...prev,
+                                  agendamentoWhatsappServicosIds: newIds.length > 0 ? newIds : []
+                                }));
+                              }
+                            }}
+                            className="w-5 h-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <div className="flex flex-col flex-1 min-w-0">
+                            <span className="font-semibold text-slate-900 truncate">{service.nome}</span>
+                            <div className="flex items-center gap-3 mt-1">
+                              <span className="text-xs text-slate-500">
+                                R$ {(service.precoCentavos / 100).toFixed(2)}
+                              </span>
+                              <span className="text-xs text-slate-400">•</span>
+                              <span className="text-xs text-slate-500">
+                                {service.duracaoMin} min
+                              </span>
+                            </div>
+                          </div>
+                          {isSelected && (
+                            <Check className="w-5 h-5 text-indigo-600 flex-shrink-0" />
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div className="p-4 border-t bg-slate-50">
+              {(() => {
+                const currentIds = settings.agendamentoWhatsappServicosIds || [];
+                const isAllSelected = currentIds.length === 0;
+                const selectedCount = currentIds.length;
+                const selectedServicesList = services.filter(s => currentIds.includes(s.id));
+                const totalPrice = selectedServicesList.reduce((sum, s) => sum + (s.precoCentavos || 0), 0);
+                const totalDuration = selectedServicesList.reduce((sum, s) => sum + (s.duracaoMin || 0), 0);
+                
+                return (
+                  <>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-slate-700">
+                        {isAllSelected 
+                          ? 'Todos os serviços ativos (padrão)' 
+                          : `${selectedCount} serviço${selectedCount !== 1 ? 's' : ''} selecionado${selectedCount !== 1 ? 's' : ''}`
+                        }
+                      </span>
+                      {!isAllSelected && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSettings(prev => ({ ...prev, agendamentoWhatsappServicosIds: [] }));
+                          }}
+                          className="text-xs"
+                        >
+                          Limpar
+                        </Button>
+                      )}
+                    </div>
+                    {!isAllSelected && (
+                      <div className="flex items-center gap-2 text-sm mb-3">
+                        <span className="text-slate-600">Total:</span>
+                        <span className="font-semibold text-slate-900">
+                          R$ {(totalPrice / 100).toFixed(2)} • {totalDuration} min
+                        </span>
+                      </div>
+                    )}
+                    <Button
+                      onClick={() => setShowServiceModal(false)}
+                      className={cn(
+                        'w-full',
+                        isVibrant
+                          ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                          : 'bg-blue-600 hover:bg-blue-700 text-white'
+                      )}
+                    >
+                      Confirmar
+                    </Button>
+                  </>
+                );
+              })()}
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
     </AccessGuard>
   );
 }

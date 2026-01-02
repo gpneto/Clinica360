@@ -215,6 +215,7 @@ export async function getOrCreateEvolutionInstance(
       instanceName,
       token: `token_${companyId}_${Date.now()}`,
       integration: integrationType,
+      groupsIgnore: true, // Ignorar grupos por padrão
     };
     
     // Para WhatsApp Business, não enviar qrcode na criação (integração é baseada em token)
@@ -414,6 +415,50 @@ export async function getEvolutionQRCode(instanceName: string): Promise<string |
   } catch (error) {
     console.error(`[Evolution] Erro ao obter QR Code`, error);
     return null;
+  }
+}
+
+/**
+ * Deleta uma instância do Evolution API
+ */
+export async function deleteEvolutionInstance(instanceName: string): Promise<boolean> {
+  try {
+    const apiKey = getEvolutionApiKey();
+    const apiUrl = getEvolutionApiUrl();
+    
+    if (!apiKey || apiKey === '') {
+      throw new Error('EVOLUTION_API_KEY não configurada');
+    }
+
+    // Deletar a instância
+    const deleteResponse = await fetchWithSelfSignedCert(`${apiUrl}/instance/delete/${instanceName}`, {
+      method: 'DELETE',
+      ...getFetchOptions(apiKey),
+    });
+
+    if (!deleteResponse.ok) {
+      const errorText = await deleteResponse.text();
+      console.error('[Evolution] Erro ao deletar instância:', {
+        status: deleteResponse.status,
+        statusText: deleteResponse.statusText,
+        error: errorText,
+        instanceName,
+      });
+      
+      // Se a instância não existe (404), considerar como sucesso
+      if (deleteResponse.status === 404) {
+        console.log('[Evolution] Instância não existe, considerando como deletada:', instanceName);
+        return true;
+      }
+      
+      throw new Error(`Erro ao deletar instância: ${deleteResponse.status} ${errorText}`);
+    }
+
+    console.log('[Evolution] Instância deletada com sucesso:', instanceName);
+    return true;
+  } catch (error) {
+    console.error('[Evolution] Erro ao deletar instância:', error);
+    throw error;
   }
 }
 

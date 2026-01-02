@@ -75,6 +75,7 @@ echo "📦 Copiando arquivos para VM..."
 gcloud compute scp --recurse \
     docker-compose.yml \
     config/ \
+    ../redis-cache-service/ \
     ${VM_NAME}:/opt/evolution-api-gcp/ \
     --zone=${ZONE} \
     --project=${PROJECT_ID}

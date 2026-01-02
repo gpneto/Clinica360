@@ -419,3 +419,5 @@ sudo docker compose up -d
 3. **Se não houver arquivos em `instances/`**, verifique o PostgreSQL - as instâncias podem estar apenas no banco
 4. **Use `exit` duas vezes** para sair do container e depois da VM
 
+
+

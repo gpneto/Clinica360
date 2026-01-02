@@ -135,3 +135,5 @@ echo "💡 Próximos passos:"
 echo "   - Acesse a VM: gcloud compute ssh ${VM_NAME} --zone=${ZONE}"
 echo "   - Para fazer deploy: bash scripts/05-deploy.sh"
 
+
+

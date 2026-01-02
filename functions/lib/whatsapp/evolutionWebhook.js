@@ -6,6 +6,7 @@ const https_1 = require("firebase-functions/v2/https");
 const https_2 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-admin/firestore");
 const whatsappEnvio_1 = require("./whatsappEnvio");
+const whatsappAgendamento_1 = require("./whatsappAgendamento");
 const storage_1 = require("firebase-admin/storage");
 // Funções helper para acessar secrets do Evolution API
 function getEvolutionApiKey() {
@@ -752,6 +753,9 @@ async function updateStatus(companyId, data) {
     }
 }
 async function handleMessage(companyId, message, instanceName) {
+    const handleStart = Date.now();
+    const chatId = message.key.remoteJid || '';
+    console.log(`[Evolution Webhook] [${chatId}] handleMessage INÍCIO - ${new Date().toISOString()}`);
     try {
         const wamId = message.key.id;
         if (!wamId) {
@@ -1079,11 +1083,62 @@ async function handleMessage(companyId, message, instanceName) {
             hasMedia: !!mediaInfo,
             mediaUrl: mediaInfo?.url?.substring(0, 100),
         });
+        // Processar agendamento pelo WhatsApp (apenas para mensagens recebidas)
+        if (!message.key.fromMe && messageText && messageText.trim() && companyId) {
+            try {
+                console.log(`[Evolution Webhook] 🔍 Verificando agendamento para mensagem recebida:`, {
+                    companyId,
+                    chatId,
+                    messageText: messageText.substring(0, 50),
+                    fromMe: message.key.fromMe,
+                });
+                // Verificar se agendamento está habilitado
+                const checkStart = Date.now();
+                console.log(`[Evolution Webhook] [${chatId}] Verificando se agendamento está habilitado...`);
+                const agendamentoEnabled = await (0, whatsappAgendamento_1.isAgendamentoWhatsappEnabled)(companyId);
+                console.log(`[Evolution Webhook] [${chatId}] 📋 Agendamento habilitado? ${agendamentoEnabled} (${companyId}) - ${Date.now() - checkStart}ms`);
+                if (agendamentoEnabled) {
+                    // Tentar processar como mensagem de agendamento
+                    const processStart = Date.now();
+                    console.log(`[Evolution Webhook] [${chatId}] 🔄 Tentando processar mensagem de agendamento...`);
+                    const processed = await (0, whatsappAgendamento_1.processAgendamentoMessage)(companyId, chatId, messageText);
+                    console.log(`[Evolution Webhook] [${chatId}] ✅ Mensagem processada? ${processed} - ${Date.now() - processStart}ms`);
+                    // Se não processou, tentar mensagem inicial
+                    if (!processed) {
+                        const initialStart = Date.now();
+                        console.log(`[Evolution Webhook] [${chatId}] 📨 Mensagem não processada, tentando handleInitialMessage...`);
+                        const initialResult = await (0, whatsappAgendamento_1.handleInitialMessage)(companyId, chatId, messageText);
+                        console.log(`[Evolution Webhook] [${chatId}] ✅ handleInitialMessage retornou: ${initialResult} - ${Date.now() - initialStart}ms`);
+                    }
+                    // Se foi processado, a mensagem já foi respondida, mas ainda vamos salvar no histórico
+                }
+                else {
+                    console.log(`[Evolution Webhook] ⚠️ Agendamento não está habilitado para empresa ${companyId}`);
+                }
+            }
+            catch (error) {
+                console.error(`[Evolution Webhook] ❌ Erro ao processar agendamento (${companyId}):`, error);
+                console.error(`[Evolution Webhook] Stack trace:`, error.stack);
+                // Continuar com o fluxo normal mesmo se houver erro no agendamento
+            }
+        }
+        else {
+            console.log(`[Evolution Webhook] ⏭️ Pulando processamento de agendamento:`, {
+                fromMe: message.key.fromMe,
+                hasMessageText: !!messageText && messageText.trim().length > 0,
+                hasCompanyId: !!companyId,
+            });
+        }
         // Buscar nome do paciente pelo número de telefone
+        const patientNameStart = Date.now();
+        console.log(`[Evolution Webhook] [${chatId}] Buscando nome do paciente...`);
         const patientName = await findPatientNameByPhone(companyId, chatId);
+        console.log(`[Evolution Webhook] [${chatId}] Nome do paciente obtido em ${Date.now() - patientNameStart}ms`);
         // Determinar direção da mensagem
         const direction = message.key.fromMe ? 'outbound' : 'inbound';
         // Salvar mensagem no Firestore
+        const saveStart = Date.now();
+        console.log(`[Evolution Webhook] [${chatId}] Preparando dados da mensagem para salvar...`);
         const messageData = {
             wam_id: wamId,
             message: {
@@ -1152,12 +1207,14 @@ async function handleMessage(companyId, message, instanceName) {
             willSave: true,
             readField: direction === 'inbound' ? 'undefined (não lida)' : 'n/a (outbound)',
         });
+        const setStart = Date.now();
         await messageRef.set(messageData, { merge: true });
+        console.log(`[Evolution Webhook] [${chatId}] Mensagem salva no Firestore em ${Date.now() - setStart}ms`);
         // Verificar se foi salvo corretamente
         const savedDoc = await messageRef.get();
         if (savedDoc.exists) {
             const savedData = savedDoc.data();
-            console.log(`[Evolution Webhook] ✅ Mensagem salva no Firestore (${companyId}):`, {
+            console.log(`[Evolution Webhook] [${chatId}] ✅ Mensagem salva no Firestore (${companyId}) - ${Date.now() - saveStart}ms total:`, {
                 wamId,
                 chatId,
                 messageSource: savedData?.messageSource,
@@ -1238,9 +1295,10 @@ async function handleMessage(companyId, message, instanceName) {
         console.log(`[Evolution Webhook] ✅ Contato salvo/atualizado (${companyId}): ${chatId}`);
         // Foto do contato será atualizada apenas durante a sincronização manual
         // Não atualizar foto automaticamente no webhook para evitar fotos incorretas
+        console.log(`[Evolution Webhook] [${chatId}] handleMessage FIM - ${Date.now() - handleStart}ms total`);
     }
     catch (error) {
-        console.error(`[Evolution Webhook] Erro ao processar mensagem (${companyId || 'unknown'}):`, error);
+        console.error(`[Evolution Webhook] [${chatId}] Erro ao processar mensagem (${companyId || 'unknown'}) em ${Date.now() - handleStart}ms:`, error);
     }
 }
 /**
@@ -1541,7 +1599,7 @@ async function processEvolutionWebhook(payload) {
 exports.evolutionWebhook = (0, https_1.onRequest)({
     region: 'us-central1',
     memory: '512MiB',
-    timeoutSeconds: 60,
+    timeoutSeconds: 300,
     maxInstances: 40,
     cors: true,
     secrets: ['evolution-api-key', 'evolution-api-url'],

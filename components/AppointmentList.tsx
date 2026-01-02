@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Clock, MapPin, DollarSign, User, Scissors, Edit, Trash2, Phone, Mail } from 'lucide-react';
+import { Clock, MapPin, DollarSign, User, Scissors, Edit, Trash2, Phone, Mail, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Appointment, Professional, Service, Patient } from '@/types';
@@ -147,6 +147,16 @@ export function AppointmentList({
                   </div>
 
                   <div className="flex items-center gap-2 ml-4">
+                    {appointment.criadoViaWhatsapp && (
+                      <Badge
+                        variant="outline"
+                        className="flex items-center gap-1 text-xs px-2 py-1 font-semibold border-green-200 text-green-700 bg-green-50"
+                        title="Agendamento criado pelo cliente via WhatsApp"
+                      >
+                        <MessageSquare className="w-3 h-3" />
+                        WhatsApp
+                      </Badge>
+                    )}
                     <Badge className={`${getStatusColor(appointment)} text-xs px-2 py-1 font-semibold`}>
                       {getStatusLabel(appointment)}
                     </Badge>

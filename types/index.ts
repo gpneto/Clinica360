@@ -143,6 +143,7 @@ export interface Patient {
   dataNascimento?: Date; // Data de nascimento para exibir aniversário no calendário
   ultimoProcedimentoDate?: Date; // Data do último procedimento concluído
   idCapim?: string; // ID do paciente no sistema Capim (para migração e correlação)
+  criadoViaWhatsapp?: boolean; // Indica se o paciente foi criado via WhatsApp
 }
 
 export interface PatientEvolutionImage {
@@ -194,6 +195,7 @@ export interface Appointment {
   recurrenceOriginalStart?: Date;
   recurrenceEndsAt?: Date;
   idCapim?: string; // ID do agendamento no sistema Capim (para migração e correlação)
+  criadoViaWhatsapp?: boolean; // Indica se o agendamento foi criado pelo cliente via WhatsApp
 }
 
 export interface Message {

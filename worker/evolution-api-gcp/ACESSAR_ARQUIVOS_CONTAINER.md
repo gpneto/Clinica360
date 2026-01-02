@@ -198,3 +198,5 @@ sudo docker compose exec evolution-api ls -lah /evolution/
    sudo docker compose logs -f evolution-api
    ```
 
+
+

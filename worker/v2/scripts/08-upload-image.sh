@@ -96,3 +96,5 @@ echo ""
 echo "📋 Próximo passo: Atualizar docker-compose.yml para usar a imagem local"
 echo "   bash scripts/09-update-compose-image.sh"
 
+
+

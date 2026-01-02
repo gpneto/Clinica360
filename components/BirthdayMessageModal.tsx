@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Sparkles, Send, RotateCcw, MessageCircle, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -34,9 +35,15 @@ export function BirthdayMessageModal({
   const [checking, setChecking] = useState(true);
   const [sentAt, setSentAt] = useState<Date | null>(null);
   const [copied, setCopied] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   // Verificar se é aniversário hoje
   const isTodayBirthday = isSameDay(birthdayDate, new Date());
+
+  // Garantir que o componente está montado no cliente antes de renderizar o portal
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (isOpen && isTodayBirthday && companyId && patientId) {
@@ -358,34 +365,30 @@ Parabéns pelo seu dia especial! 🎈`;
     window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
-  if (!isTodayBirthday) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-        <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-slate-900">Mensagem de Aniversário</h2>
-            <button
-              onClick={onClose}
-              className="text-slate-400 hover:text-slate-600"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-          <p className="text-slate-600 mb-4">
-            A mensagem de aniversário só pode ser enviada no dia do aniversário.
-          </p>
-          <Button onClick={onClose} className="w-full">
-            Fechar
-          </Button>
+  const modalContent = !isTodayBirthday ? (
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/50">
+      <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold text-slate-900">Mensagem de Aniversário</h2>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-600"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
+        <p className="text-slate-600 mb-4">
+          A mensagem de aniversário só pode ser enviada no dia do aniversário.
+        </p>
+        <Button onClick={onClose} className="w-full">
+          Fechar
+        </Button>
       </div>
-    );
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    </div>
+  ) : (
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/50">
       <div className="bg-white rounded-lg shadow-xl p-6 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
@@ -564,5 +567,7 @@ Parabéns pelo seu dia especial! 🎈`;
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }
 

@@ -2,6 +2,64 @@ import type { WebHookAgendamentoRequest, Staff } from "./types/webhook-agendamen
 import * as admin from "firebase-admin";
 import { DateTime } from "luxon";
 import { sendEvolutionTextMessage } from "./evolutionClient";
+// Função helper para obter a URL do serviço Redis Cache
+// Usa o secret evolution-api-url para extrair o host e construir a URL do serviço
+function getRedisServiceUrl(): string | null {
+  // Tentar variável de ambiente direta primeiro
+  if (process.env.REDIS_SERVICE_URL) {
+    return process.env.REDIS_SERVICE_URL;
+  }
+
+  // Tentar obter do secret evolution-api-url
+  const env = process.env as any;
+  const evolutionApiUrl = env['evolution-api-url'] || 
+                         env.EVOLUTION_API_URL || 
+                         process.env.EVOLUTION_API_URL;
+
+  if (evolutionApiUrl) {
+    try {
+      // Extrair host da URL (pode ser http:// ou https://)
+      const url = new URL(evolutionApiUrl);
+      // Construir URL do serviço Redis Cache na porta 8081
+      // SEMPRE usar HTTP (não HTTPS) para o serviço interno
+      let redisServiceUrl = `http://${url.hostname}:8081`;
+      
+      // Garantir que não está usando HTTPS (segurança extra)
+      if (redisServiceUrl.startsWith('https://')) {
+        redisServiceUrl = redisServiceUrl.replace('https://', 'http://');
+      }
+      
+      console.log(`[Settings] URL do Redis Cache Service construída a partir de evolution-api-url: ${redisServiceUrl} (original: ${evolutionApiUrl})`);
+      return redisServiceUrl;
+    } catch (error) {
+      console.warn(`[Settings] Erro ao extrair host de evolution-api-url (${evolutionApiUrl}):`, error);
+    }
+  }
+
+  return null;
+}
+
+// Usar cache HTTP se disponível, senão usar cache direto
+const REDIS_SERVICE_URL = getRedisServiceUrl();
+let getCache: <T>(key: string) => Promise<T | null>;
+let setCache: <T>(key: string, value: T, ttl?: number) => Promise<boolean>;
+let deleteCache: (key: string) => Promise<boolean>;
+
+if (REDIS_SERVICE_URL) {
+  // Usar serviço HTTP (mais rápido, conexão sempre aberta)
+  const httpCache = require("../utils/redisCacheHttp");
+  getCache = httpCache.getCache;
+  setCache = httpCache.setCache;
+  deleteCache = httpCache.deleteCache;
+  console.log(`[Settings] Usando Redis Cache Service HTTP: ${REDIS_SERVICE_URL}`);
+} else {
+  // Usar conexão direta (fallback)
+  const directCache = require("../utils/redisCache");
+  getCache = directCache.getCache;
+  setCache = directCache.setCache;
+  deleteCache = directCache.deleteCache;
+  console.log(`[Settings] Usando conexão Redis direta (REDIS_SERVICE_URL não configurado e evolution-api-url não disponível)`);
+}
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -20,6 +78,35 @@ export interface CompanySettings {
   whatsappProvider?: WhatsappProvider;
   whatsappIntegrationType?: "WHATSAPP-BAILEYS" | "WHATSAPP-BUSINESS";
   telefoneSalao?: string;
+  agendamentoWhatsappHabilitado?: boolean;
+  agendamentoWhatsappApenasContatos?: boolean;
+  agendamentoWhatsappServicosIds?: string[];
+  horarioFuncionamento?: {
+    horariosPorDia?: Array<{
+      diaSemana: number;
+      inicio: string;
+      fim: string;
+      ativo: boolean;
+    }>;
+    intervalos?: Array<{
+      id: string;
+      diaSemana: number;
+      inicio: string;
+      fim: string;
+      descricao?: string;
+    }>;
+    bloqueios?: Array<{
+      id: string;
+      tipo: 'semanal' | 'mensal' | 'data_especifica';
+      diaSemana?: number;
+      diaMes?: number;
+      dataEspecifica?: string;
+      inicio: string;
+      fim: string;
+      descricao?: string;
+      ativo: boolean;
+    }>;
+  };
   [key: string]: unknown;
 }
 
@@ -37,22 +124,109 @@ const DEFAULT_COMPANY_SETTINGS: CompanySettings = {
   whatsappIntegrationType: "WHATSAPP-BAILEYS",
 };
 
+/**
+ * Chave de cache para configurações da empresa
+ */
+function getSettingsCacheKey(companyId: string): string {
+  return `company:${companyId}:settings`;
+}
+
 export async function getCompanySettings(companyId?: string): Promise<CompanySettings> {
   if (!companyId) {
     return { ...DEFAULT_COMPANY_SETTINGS };
   }
 
+  const settingsStart = Date.now();
+  const cacheKey = getSettingsCacheKey(companyId);
+  
+  // PASSO 1: Tentar obter do cache Redis primeiro
+  console.log(`[Settings] [${companyId}] 🔍 Verificando cache Redis...`);
   try {
+    const cached = await getCache<CompanySettings>(cacheKey);
+    if (cached) {
+      console.log(`[Settings] [${companyId}] ✅ Configurações obtidas do CACHE em ${Date.now() - settingsStart}ms`);
+      return cached;
+    }
+    console.log(`[Settings] [${companyId}] ⚠️ Cache não encontrado, buscando no Firestore...`);
+  } catch (error) {
+    console.warn(`[Settings] [${companyId}] ⚠️ Erro ao obter do cache, buscando no Firestore:`, error);
+  }
+
+  // PASSO 2: Se não estiver no cache (ou cache indisponível), buscar no Firestore
+  console.log(`[Settings] [${companyId}] 📥 Buscando configurações no Firestore...`);
+  
+  try {
+    const dbStart = Date.now();
+    const settingsSnap = await db
+      .collection(`companies/${companyId}/settings`)
+      .doc("general")
+      .get();
+    console.log(`[Settings] [${companyId}] ⏱️ Firestore query executada em ${Date.now() - dbStart}ms`);
+
+    const settingsData = settingsSnap.exists ? settingsSnap.data() ?? {} : {};
+    const result = { ...DEFAULT_COMPANY_SETTINGS, ...settingsData };
+    
+    // PASSO 3: SEMPRE tentar salvar no cache Redis após buscar no Firestore
+    // TTL = 0 significa sem expiração (cache permanente até ser invalidado manualmente)
+    console.log(`[Settings] [${companyId}] 💾 Salvando configurações no cache Redis (sem TTL)...`);
+    try {
+      const cacheSaved = await setCache(cacheKey, result, 0);
+      if (cacheSaved) {
+        console.log(`[Settings] [${companyId}] ✅ Configurações salvas no cache Redis com sucesso (sem expiração)`);
+      } else {
+        console.warn(`[Settings] [${companyId}] ⚠️ Não foi possível salvar no cache Redis (mas configurações foram obtidas do Firestore)`);
+      }
+    } catch (cacheError) {
+      console.warn(`[Settings] [${companyId}] ⚠️ Erro ao salvar no cache Redis (não crítico):`, cacheError);
+      // Não bloquear o retorno mesmo se o cache falhar
+    }
+    
+    console.log(`[Settings] [${companyId}] ✅ Configurações obtidas do Firestore e cache atualizado em ${Date.now() - settingsStart}ms total`);
+    return result;
+  } catch (error) {
+    console.error(`[Settings] [${companyId}] ❌ Falha ao obter configurações em ${Date.now() - settingsStart}ms:`, error);
+    return { ...DEFAULT_COMPANY_SETTINGS };
+  }
+}
+
+/**
+ * Invalida o cache de configurações da empresa
+ */
+export async function invalidateCompanySettingsCache(companyId: string): Promise<void> {
+  const cacheKey = getSettingsCacheKey(companyId);
+  try {
+    await deleteCache(cacheKey);
+    console.log(`[Settings] [${companyId}] Cache de configurações invalidado`);
+  } catch (error) {
+    console.error(`[Settings] [${companyId}] Erro ao invalidar cache:`, error);
+  }
+}
+
+/**
+ * Atualiza o cache de configurações da empresa com os valores mais recentes do Firestore
+ */
+export async function updateCompanySettingsCache(companyId: string): Promise<void> {
+  const cacheKey = getSettingsCacheKey(companyId);
+  try {
+    // Buscar configurações atualizadas do Firestore
+    console.log(`[Settings] [${companyId}] 🔄 Atualizando cache com valores do Firestore...`);
     const settingsSnap = await db
       .collection(`companies/${companyId}/settings`)
       .doc("general")
       .get();
 
     const settingsData = settingsSnap.exists ? settingsSnap.data() ?? {} : {};
-    return { ...DEFAULT_COMPANY_SETTINGS, ...settingsData };
+    const result = { ...DEFAULT_COMPANY_SETTINGS, ...settingsData };
+    
+    // Atualizar cache com os novos valores (TTL = 0 = sem expiração)
+    const cacheSaved = await setCache(cacheKey, result, 0);
+    if (cacheSaved) {
+      console.log(`[Settings] [${companyId}] ✅ Cache atualizado com sucesso`);
+    } else {
+      console.warn(`[Settings] [${companyId}] ⚠️ Não foi possível atualizar o cache`);
+    }
   } catch (error) {
-    console.error(`[Settings] Falha ao obter configurações da empresa ${companyId}:`, error);
-    return { ...DEFAULT_COMPANY_SETTINGS };
+    console.error(`[Settings] [${companyId}] Erro ao atualizar cache:`, error);
   }
 }
 

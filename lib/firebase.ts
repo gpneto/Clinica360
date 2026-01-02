@@ -44,7 +44,7 @@ export const db = typeof window !== 'undefined'
   : initializeFirestore(app, {
       localCache: memoryLocalCache(),
     });
-export const functions = getFunctions(app);
+export const functions = getFunctions(app, 'us-central1');
 export const storage = getStorage(app, storageBucketUrl);
 // Conectar ao emulador de Functions em desenvolvimento, quando habilitado
 // if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_USE_FUNCTIONS_EMULATOR === 'true') {

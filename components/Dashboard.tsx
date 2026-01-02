@@ -31,7 +31,8 @@ import {
   MapPin,
   X,
   Eye,
-  EyeOff
+  EyeOff,
+  MessageSquare
 } from 'lucide-react';
 import { cn, getGradientColors, getGradientStyle } from '@/lib/utils';
 import { useCustomerLabels } from '@/hooks/useCustomerLabels';
@@ -160,6 +161,16 @@ function AppointmentItem({
                   >
                     <Repeat className="w-3 h-3" />
                     Recorrente
+                  </Badge>
+                )}
+                {appointment.criadoViaWhatsapp && (
+                  <Badge
+                    variant="outline"
+                    className="flex items-center gap-1 text-xs px-3 py-1 font-semibold border-green-200 text-green-700 bg-green-50"
+                    title="Agendamento criado pelo cliente via WhatsApp"
+                  >
+                    <MessageSquare className="w-3 h-3" />
+                    WhatsApp
                   </Badge>
                 )}
                 <Badge 
@@ -548,19 +559,31 @@ export function Dashboard({ onViewAppointment, onCompleteClick }: DashboardProps
   }, [appointments]);
 
   const getStatusBadge = (appointment: Appointment) => {
-    if (appointment.status === 'concluido') {
-      return <Badge className="bg-green-500 text-white">Concluído</Badge>;
-    }
-    if (appointment.status === 'cancelado') {
-      return <Badge className="bg-gray-500 text-white">Cancelado</Badge>;
-    }
-    if (appointment.status === 'no_show' || appointment.clientePresente === false) {
-      return <Badge className="bg-red-500 text-white">Não compareceu</Badge>;
-    }
-    if (appointment.status === 'pendente') {
-      return <Badge className="bg-yellow-500 text-white">Pendente</Badge>;
-    }
-    return <Badge className="bg-blue-500 text-white">Agendado</Badge>;
+    return (
+      <div className="flex items-center gap-2">
+        {appointment.criadoViaWhatsapp && (
+          <Badge
+            variant="outline"
+            className="flex items-center gap-1 text-xs px-2 py-0.5 font-semibold border-green-200 text-green-700 bg-green-50"
+            title="Agendamento criado pelo cliente via WhatsApp"
+          >
+            <MessageSquare className="w-3 h-3" />
+            WhatsApp
+          </Badge>
+        )}
+        {appointment.status === 'concluido' ? (
+          <Badge className="bg-green-500 text-white">Concluído</Badge>
+        ) : appointment.status === 'cancelado' ? (
+          <Badge className="bg-gray-500 text-white">Cancelado</Badge>
+        ) : appointment.status === 'no_show' || appointment.clientePresente === false ? (
+          <Badge className="bg-red-500 text-white">Não compareceu</Badge>
+        ) : appointment.status === 'pendente' ? (
+          <Badge className="bg-yellow-500 text-white">Pendente</Badge>
+        ) : (
+          <Badge className="bg-blue-500 text-white">Agendado</Badge>
+        )}
+      </div>
+    );
   };
 
   const getAppointmentTime = (appointment: Appointment) => {

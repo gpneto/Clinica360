@@ -29,3 +29,5 @@ echo '💾 Espaço em disco:'
 df -h / | tail -1
 "
 
+
+

@@ -67,3 +67,5 @@ echo ""
 echo "⚠️  ATENÇÃO: PostgreSQL está exposto publicamente na porta 5432"
 echo "   Certifique-se de usar uma senha forte no POSTGRES_PASSWORD!"
 
+
+

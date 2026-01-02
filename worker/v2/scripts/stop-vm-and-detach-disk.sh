@@ -103,3 +103,5 @@ echo "   1. A outra VM esteja parada antes de anexar o disco"
 echo "   2. O disco seja anexado na mesma zona"
 echo "   3. Os dados serão compartilhados entre as VMs que usam este disco"
 
+
+

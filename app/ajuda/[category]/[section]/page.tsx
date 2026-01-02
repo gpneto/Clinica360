@@ -1,4 +1,5 @@
 import { helpCategories } from '../../helpData';
+import HelpPage from '../../page';
 
 export async function generateStaticParams() {
   const params: { category: string; section: string }[] = [];
@@ -15,5 +16,7 @@ export async function generateStaticParams() {
   return params;
 }
 
-export { default } from '../../page';
+export default function SectionHelpPage() {
+  return <HelpPage />;
+}
 

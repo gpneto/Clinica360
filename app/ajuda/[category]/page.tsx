@@ -1,4 +1,5 @@
 import { helpCategories } from '../helpData';
+import HelpPage from '../page';
 
 export async function generateStaticParams() {
   return helpCategories.map((category) => ({
@@ -6,5 +7,7 @@ export async function generateStaticParams() {
   }));
 }
 
-export { default } from '../page';
+export default function CategoryHelpPage() {
+  return <HelpPage />;
+}
 

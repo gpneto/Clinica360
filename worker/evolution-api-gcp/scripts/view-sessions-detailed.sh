@@ -155,3 +155,5 @@ echo ""
 echo "💡 Nota: Se não houver instâncias, você precisa criar uma via API do Evolution:"
 echo "   POST /instance/create"
 
+
+

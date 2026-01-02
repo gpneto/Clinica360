@@ -124,3 +124,5 @@ Para a maioria dos casos, **recomendo a Opção 2** (atualizar código na VM exi
 
 A Opção 1 só faz sentido se você realmente precisa de uma VM completamente nova ou quer fazer uma migração limpa.
 
+
+

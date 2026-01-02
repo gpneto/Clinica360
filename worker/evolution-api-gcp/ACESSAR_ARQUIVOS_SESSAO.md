@@ -167,3 +167,5 @@ gcloud compute ssh evolution-api-gcp \
 
 ⚠️ **Importante**: Os arquivos de sessão contêm informações sensíveis de autenticação do WhatsApp. Não compartilhe ou exponha esses arquivos publicamente.
 
+
+

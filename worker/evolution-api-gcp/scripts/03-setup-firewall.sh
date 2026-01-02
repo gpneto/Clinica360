@@ -59,9 +59,49 @@ else
     echo "✅ Regra PostgreSQL criada!"
 fi
 
+# Regra para Redis
+if gcloud compute firewall-rules describe allow-redis --project=${PROJECT_ID} &>/dev/null; then
+    echo "⚠️  Regra allow-redis já existe, pulando..."
+else
+    echo "📝 Criando regra para Redis (porta 6379)..."
+    gcloud compute firewall-rules create allow-redis \
+        --project=${PROJECT_ID} \
+        --direction=INGRESS \
+        --priority=1000 \
+        --network=default \
+        --action=ALLOW \
+        --rules=tcp:6379 \
+        --source-ranges=0.0.0.0/0 \
+        --target-tags=http-server,https-server
+    echo "✅ Regra Redis criada!"
+fi
+
+# Regra para Redis Cache Service
+if gcloud compute firewall-rules describe allow-redis-cache-service --project=${PROJECT_ID} &>/dev/null; then
+    echo "⚠️  Regra allow-redis-cache-service já existe, pulando..."
+else
+    echo "📝 Criando regra para Redis Cache Service (porta 8081)..."
+    gcloud compute firewall-rules create allow-redis-cache-service \
+        --project=${PROJECT_ID} \
+        --direction=INGRESS \
+        --priority=1000 \
+        --network=default \
+        --action=ALLOW \
+        --rules=tcp:8081 \
+        --source-ranges=0.0.0.0/0 \
+        --target-tags=http-server,https-server
+    echo "✅ Regra Redis Cache Service criada!"
+fi
+
 echo ""
 echo "✅ Firewall configurado com sucesso!"
 echo ""
 echo "⚠️  ATENÇÃO: PostgreSQL está exposto publicamente na porta 5432"
 echo "   Certifique-se de usar uma senha forte no POSTGRES_PASSWORD!"
+echo ""
+echo "⚠️  ATENÇÃO: Redis está exposto publicamente na porta 6379"
+echo "   Certifique-se de usar uma senha forte no REDIS_PASSWORD!"
+echo ""
+echo "⚠️  ATENÇÃO: Redis Cache Service está exposto publicamente na porta 8081"
+echo "   Certifique-se de usar uma senha forte no REDIS_SERVICE_API_KEY!"
 

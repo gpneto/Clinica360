@@ -44,3 +44,5 @@ echo "💡 Se não houver containers, você pode precisar:"
 echo "   1. Iniciar os containers: cd /opt/evolution-api-gcp && sudo docker compose up -d"
 echo "   2. Verificar se o docker-compose.yml está configurado corretamente"
 
+
+

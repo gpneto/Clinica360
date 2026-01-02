@@ -84,3 +84,5 @@ Ou os passos individuais se preferir mais controle.
 - A imagem local `evolution-api-v2-custom:latest` permanece no Docker local para reutilização
 - O servidor mantém a imagem carregada, então rebuilds subsequentes são mais rápidos
 
+
+

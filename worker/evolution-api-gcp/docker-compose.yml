@@ -35,24 +35,28 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # Redis Cache
+  # Redis Cache (para Evolution API e Cache das Functions)
   redis:
     image: redis:7-alpine
     platform: linux/arm64
     container_name: evolution-redis
     restart: unless-stopped
+    ports:
+      - "6379:6379"
     volumes:
       # Disco persistente único - subpasta redis
       - /mnt/disks/evolution-data/redis:/data
     networks:
       - evolution-network
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-SmartDoctorRedis2024!Secure}
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-SmartDoctorRedis2024!Secure}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
-    command: redis-server --appendonly yes --appendfsync always --maxmemory 512mb --maxmemory-policy allkeys-lru --save 60 1000 --save 300 10 --save 900 1
+    command: redis-server --requirepass ${REDIS_PASSWORD:-SmartDoctorRedis2024!Secure} --bind 0.0.0.0 --protected-mode no --appendonly yes --appendfsync always --maxmemory 1gb --maxmemory-policy allkeys-lru --save 60 1000 --save 300 10 --save 900 1
     logging:
       driver: "json-file"
       options:
@@ -101,14 +105,14 @@ services:
       - REDIS_ENABLED=true
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-SmartDoctorRedis2024!Secure}
       - REDIS_DB=0
-      - REDIS_URI=redis://redis:6379
+      - REDIS_URI=redis://:${REDIS_PASSWORD:-SmartDoctorRedis2024!Secure}@redis:6379
       
       # Cache Redis
       # Documentação: https://doc.evolution-api.com/v2/en/env
       - CACHE_REDIS_ENABLED=true
-      - CACHE_REDIS_URI=redis://redis:6379/6
+      - CACHE_REDIS_URI=redis://:${REDIS_PASSWORD:-SmartDoctorRedis2024!Secure}@redis:6379/6
       - CACHE_REDIS_PREFIX_KEY=evolution
       - CACHE_REDIS_SAVE_INSTANCES=true
       
@@ -164,6 +168,40 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Redis Cache Service - Mantém conexão Redis sempre aberta
+  redis-cache-service:
+    build:
+      context: ./redis-cache-service
+      dockerfile: Dockerfile
+    platform: linux/arm64
+    container_name: redis-cache-service
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-SmartDoctorRedis2024!Secure}
+      - REDIS_DB=1
+      - REDIS_SERVICE_API_KEY=${REDIS_SERVICE_API_KEY:-SmartDoctorRedisService2024!Secure}
+      - PORT=8080
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - evolution-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     logging:
       driver: "json-file"
       options:

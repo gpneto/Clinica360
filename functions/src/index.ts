@@ -2,9 +2,9 @@ import * as admin from 'firebase-admin';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
-import { handleWebhookAgendamento, getWhatsappConfig, normalizarTelefone, normalizePhoneForContact, type WhatsappConfig, type MetaWhatsappConfig } from './whatsapp/whatsappEnvio';
+import { handleWebhookAgendamento, getWhatsappConfig, normalizarTelefone, normalizePhoneForContact, invalidateCompanySettingsCache, updateCompanySettingsCache, type WhatsappConfig, type MetaWhatsappConfig } from './whatsapp/whatsappEnvio';
 import { substituirParametros, templatesWhats } from './whatsapp/whatsappEnvio';
-import { sendEvolutionTextMessage } from './whatsapp/evolutionClient';
+import { sendEvolutionTextMessage, deleteEvolutionInstance } from './whatsapp/evolutionClient';
 import type { WebHookAgendamentoRequest } from './whatsapp/types/webhook-agendamento';
 import OpenAI from 'openai';
 export { whatsappWebhook } from './whatsapp/webhookWats';
@@ -1041,6 +1041,224 @@ export const checkEvolutionStatus = onCall({
     const message = error?.message || 'Erro desconhecido';
     console.error('[checkEvolutionStatus] Erro ao verificar status', error);
     throw new HttpsError('internal', `Erro ao verificar status: ${message}`);
+  }
+});
+
+/**
+ * Desconecta o WhatsApp: deleta a instância no Evolution API e limpa todas as configurações
+ */
+export const disconnectWhatsApp = onCall({
+  memory: '1GiB',
+  secrets: ['evolution-api-key', 'evolution-api-url'],
+}, async (request) => {
+  console.log('[disconnectWhatsApp] ========== INÍCIO DA FUNÇÃO ==========');
+  console.log('[disconnectWhatsApp] Request recebido:', {
+    hasAuth: !!request.auth,
+    uid: request.auth?.uid,
+    hasData: !!request.data,
+    dataKeys: request.data ? Object.keys(request.data) : [],
+  });
+
+  const uid = request.auth?.uid;
+  if (!uid) {
+    console.error('[disconnectWhatsApp] ❌ Erro: Usuário não autenticado');
+    throw new HttpsError('unauthenticated', 'Usuário não autenticado');
+  }
+
+  const companyId = (request.data?.companyId ?? request.auth?.token?.companyId);
+  console.log('[disconnectWhatsApp] CompanyId obtido:', companyId);
+  
+  if (!companyId) {
+    console.error('[disconnectWhatsApp] ❌ Erro: companyId é obrigatório');
+    throw new HttpsError('invalid-argument', 'companyId é obrigatório');
+  }
+
+  try {
+    const instanceName = `smartdoctor_${companyId}`;
+    console.log(`[disconnectWhatsApp] ========== ETAPA 1: DELETAR INSTÂNCIA NO EVOLUTION API ==========`);
+    console.log(`[disconnectWhatsApp] Instância: ${instanceName}`);
+    console.log(`[disconnectWhatsApp] CompanyId: ${companyId}`);
+    
+    // 1. Deletar instância no Evolution API (PRIORIDADE: fazer primeiro)
+    try {
+      console.log(`[disconnectWhatsApp] Chamando deleteEvolutionInstance(${instanceName})...`);
+      const deleted = await deleteEvolutionInstance(instanceName);
+      if (deleted) {
+        console.log(`[disconnectWhatsApp] ✅ Instância ${instanceName} deletada com sucesso no Evolution API`);
+      } else {
+        console.warn(`[disconnectWhatsApp] ⚠️ Instância ${instanceName} não foi deletada (pode não existir)`);
+      }
+    } catch (error: any) {
+      console.error(`[disconnectWhatsApp] ❌ Erro ao deletar instância no Evolution API:`, {
+        error: error.message,
+        stack: error.stack,
+        name: error.name,
+      });
+      console.warn(`[disconnectWhatsApp] Continuando com limpeza de dados locais mesmo com erro na API`);
+    }
+    
+    console.log(`[disconnectWhatsApp] ========== ETAPA 2: LIMPAR DOCUMENTO DE INTEGRAÇÃO ==========`);
+    const integrationRef = db.collection(`companies/${companyId}/integrations`).doc('whatsappEvolution');
+    console.log(`[disconnectWhatsApp] Caminho do documento: ${integrationRef.path}`);
+    
+    const integrationDoc = await integrationRef.get();
+    console.log(`[disconnectWhatsApp] Documento existe? ${integrationDoc.exists}`);
+    
+    if (integrationDoc.exists) {
+      await integrationRef.delete();
+      console.log(`[disconnectWhatsApp] ✅ Documento de integração deletado`);
+    } else {
+      console.log(`[disconnectWhatsApp] ⚠️ Documento de integração não existe, pulando...`);
+    }
+    
+    console.log(`[disconnectWhatsApp] ========== ETAPA 3: LIMPAR CONFIGURAÇÕES DO WHATSAPP ==========`);
+    const settingsRef = db.collection(`companies/${companyId}/settings`).doc('general');
+    console.log(`[disconnectWhatsApp] Caminho do documento: ${settingsRef.path}`);
+    
+    const settingsDoc = await settingsRef.get();
+    console.log(`[disconnectWhatsApp] Documento de settings existe? ${settingsDoc.exists}`);
+    
+    if (settingsDoc.exists) {
+      const currentSettings = settingsDoc.data();
+      console.log(`[disconnectWhatsApp] Configurações atuais do WhatsApp:`, {
+        whatsappProvider: currentSettings?.whatsappProvider,
+        whatsappIntegrationType: currentSettings?.whatsappIntegrationType,
+        hasWhatsappNumber: !!currentSettings?.whatsappNumber,
+        agendamentoWhatsappHabilitado: currentSettings?.agendamentoWhatsappHabilitado,
+      });
+      
+      await settingsRef.update({
+        whatsappProvider: 'disabled',
+        whatsappIntegrationType: admin.firestore.FieldValue.delete(),
+        whatsappNumber: admin.firestore.FieldValue.delete(),
+        agendamentoWhatsappHabilitado: admin.firestore.FieldValue.delete(),
+        agendamentoWhatsappApenasContatos: admin.firestore.FieldValue.delete(),
+        agendamentoWhatsappServicosIds: admin.firestore.FieldValue.delete(),
+      });
+      console.log(`[disconnectWhatsApp] ✅ Configurações do WhatsApp limpas`);
+      
+      // Invalidar cache de configurações
+      await invalidateCompanySettingsCache(companyId);
+    } else {
+      console.log(`[disconnectWhatsApp] ⚠️ Documento de settings não existe, pulando...`);
+    }
+    
+    console.log(`[disconnectWhatsApp] ========== ETAPA 4: LIMPAR CONTEXTOS DE AGENDAMENTO ==========`);
+    try {
+      const agendamentoContextRef = db.collection(`companies/${companyId}/whatsappAgendamentoContext`);
+      console.log(`[disconnectWhatsApp] Caminho da coleção: ${agendamentoContextRef.path}`);
+      
+      const contextSnapshot = await agendamentoContextRef.get();
+      console.log(`[disconnectWhatsApp] Total de contextos encontrados: ${contextSnapshot.size}`);
+      
+      if (contextSnapshot.size > 0) {
+        const batch1 = db.batch();
+        contextSnapshot.docs.forEach((doc, index) => {
+          console.log(`[disconnectWhatsApp] Adicionando contexto ${index + 1} ao batch: ${doc.id}`);
+          batch1.delete(doc.ref);
+        });
+        await batch1.commit();
+        console.log(`[disconnectWhatsApp] ✅ ${contextSnapshot.size} contextos de agendamento limpos`);
+      } else {
+        console.log(`[disconnectWhatsApp] ⚠️ Nenhum contexto de agendamento encontrado`);
+      }
+    } catch (error: any) {
+      console.error(`[disconnectWhatsApp] ❌ Erro ao limpar contextos de agendamento:`, {
+        error: error.message,
+        stack: error.stack,
+      });
+    }
+    
+    console.log(`[disconnectWhatsApp] ========== ETAPA 5: LIMPAR MENSAGENS DO WHATSAPP ==========`);
+    try {
+      const messagesRef = db.collection(`companies/${companyId}/whatsappMessages`);
+      console.log(`[disconnectWhatsApp] Caminho da coleção: ${messagesRef.path}`);
+      
+      const messagesSnapshot = await messagesRef.get();
+      console.log(`[disconnectWhatsApp] Total de mensagens encontradas: ${messagesSnapshot.size}`);
+      
+      let messageCount = 0;
+      const BATCH_SIZE = 500;
+      
+      if (messagesSnapshot.size > 0) {
+        for (let i = 0; i < messagesSnapshot.docs.length; i += BATCH_SIZE) {
+          const batch2 = db.batch();
+          const batchDocs = messagesSnapshot.docs.slice(i, i + BATCH_SIZE);
+          console.log(`[disconnectWhatsApp] Processando lote ${Math.floor(i / BATCH_SIZE) + 1} (${batchDocs.length} mensagens)`);
+          
+          batchDocs.forEach(doc => {
+            batch2.delete(doc.ref);
+            messageCount++;
+          });
+          
+          await batch2.commit();
+          console.log(`[disconnectWhatsApp] ✅ Lote ${Math.floor(i / BATCH_SIZE) + 1} deletado (${batchDocs.length} mensagens)`);
+        }
+        console.log(`[disconnectWhatsApp] ✅ Total: ${messageCount} mensagens do WhatsApp removidas`);
+      } else {
+        console.log(`[disconnectWhatsApp] ⚠️ Nenhuma mensagem encontrada`);
+      }
+    } catch (error: any) {
+      console.error(`[disconnectWhatsApp] ❌ Erro ao limpar mensagens do WhatsApp:`, {
+        error: error.message,
+        stack: error.stack,
+      });
+    }
+    
+    console.log(`[disconnectWhatsApp] ========== ETAPA 6: LIMPAR CONTATOS DO WHATSAPP ==========`);
+    try {
+      const contactsRef = db.collection(`companies/${companyId}/whatsappContacts`);
+      console.log(`[disconnectWhatsApp] Caminho da coleção: ${contactsRef.path}`);
+      
+      const contactsSnapshot = await contactsRef.get();
+      console.log(`[disconnectWhatsApp] Total de contatos encontrados: ${contactsSnapshot.size}`);
+      
+      let contactCount = 0;
+      const BATCH_SIZE = 500;
+      
+      if (contactsSnapshot.size > 0) {
+        for (let i = 0; i < contactsSnapshot.docs.length; i += BATCH_SIZE) {
+          const batch3 = db.batch();
+          const batchDocs = contactsSnapshot.docs.slice(i, i + BATCH_SIZE);
+          console.log(`[disconnectWhatsApp] Processando lote ${Math.floor(i / BATCH_SIZE) + 1} (${batchDocs.length} contatos)`);
+          
+          batchDocs.forEach(doc => {
+            batch3.delete(doc.ref);
+            contactCount++;
+          });
+          
+          await batch3.commit();
+          console.log(`[disconnectWhatsApp] ✅ Lote ${Math.floor(i / BATCH_SIZE) + 1} deletado (${batchDocs.length} contatos)`);
+        }
+        console.log(`[disconnectWhatsApp] ✅ Total: ${contactCount} contatos do WhatsApp removidos`);
+      } else {
+        console.log(`[disconnectWhatsApp] ⚠️ Nenhum contato encontrado`);
+      }
+    } catch (error: any) {
+      console.error(`[disconnectWhatsApp] ❌ Erro ao limpar contatos do WhatsApp:`, {
+        error: error.message,
+        stack: error.stack,
+      });
+    }
+    
+    console.log(`[disconnectWhatsApp] ========== CONCLUSÃO ==========`);
+    console.log(`[disconnectWhatsApp] ✅ Desconexão concluída com sucesso para empresa ${companyId}`);
+    
+    return {
+      success: true,
+      message: 'WhatsApp desconectado com sucesso. Todas as configurações, mensagens e contatos foram limpos.',
+    };
+  } catch (error: any) {
+    console.error('[disconnectWhatsApp] ========== ERRO GERAL ==========');
+    console.error('[disconnectWhatsApp] Erro completo:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+      code: error.code,
+      companyId,
+      uid,
+    });
+    throw new HttpsError('internal', error.message || 'Erro ao desconectar WhatsApp');
   }
 });
 
@@ -2532,11 +2750,13 @@ function generatePhoneVariantsHelper(phoneNumber: string): Set<string> {
 /**
  * Atualiza a collection whatsappPhoneNumbers quando as settings são salvas
  * Escuta mudanças em companies/{companyId}/settings/general
+ * Também invalida o cache Redis quando as configurações são atualizadas
  */
 export const syncWhatsappPhoneNumbers = onDocumentWritten(
   {
     document: 'companies/{companyId}/settings/general',
     region: 'us-central1',
+    secrets: ['evolution-api-url'],
   },
   async (event) => {
     try {
@@ -2545,8 +2765,14 @@ export const syncWhatsappPhoneNumbers = onDocumentWritten(
       
       if (!afterData) {
         console.log(`[syncWhatsappPhoneNumbers] Documento deletado, ignorando: ${companyId}`);
+        // Invalidar cache mesmo se o documento foi deletado
+        await invalidateCompanySettingsCache(companyId);
         return;
       }
+
+      // Invalidar cache de configurações quando as settings são atualizadas
+      await invalidateCompanySettingsCache(companyId);
+      console.log(`[syncWhatsappPhoneNumbers] ✅ Cache de configurações invalidado para empresa ${companyId}`);
 
       // Obter o número de telefone das settings
       const phoneNumber = afterData.whatsappBaileysNumber || afterData.telefoneSalao;
@@ -2965,5 +3191,59 @@ export const syncUserCustomClaims = onCall(async (request) => {
   } catch (error: any) {
     console.error(`[syncUserCustomClaims] Erro:`, error);
     throw new HttpsError('internal', `Erro ao sincronizar claims: ${error.message}`);
+  }
+});
+
+/**
+ * Função callable para invalidar o cache de configurações manualmente
+ * Útil para ser chamada do frontend após atualizar configurações
+ */
+export const invalidateSettingsCache = onCall({
+  secrets: ['evolution-api-url'],
+}, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError('unauthenticated', 'Usuário não autenticado');
+  }
+
+  const { companyId } = request.data;
+  if (!companyId) {
+    throw new HttpsError('invalid-argument', 'companyId é obrigatório');
+  }
+
+  try {
+    await invalidateCompanySettingsCache(companyId);
+    return {
+      success: true,
+      message: 'Cache de configurações invalidado com sucesso',
+    };
+  } catch (error: any) {
+    console.error(`[invalidateSettingsCache] Erro:`, error);
+    throw new HttpsError('internal', `Erro ao invalidar cache: ${error.message}`);
+  }
+});
+
+export const updateSettingsCache = onCall({
+  secrets: ['evolution-api-url'],
+}, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError('unauthenticated', 'Usuário não autenticado');
+  }
+
+  const { companyId } = request.data;
+  if (!companyId) {
+    throw new HttpsError('invalid-argument', 'companyId é obrigatório');
+  }
+
+  try {
+    await updateCompanySettingsCache(companyId);
+    return {
+      success: true,
+      message: 'Cache de configurações atualizado com sucesso',
+    };
+  } catch (error: any) {
+    console.error(`[updateSettingsCache] Erro:`, error);
+    throw new HttpsError('internal', `Erro ao atualizar cache: ${error.message}`);
   }
 });

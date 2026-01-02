@@ -1,6 +1,6 @@
 import { useState, useMemo, type CSSProperties, type MouseEvent } from 'react';
 import { motion } from 'framer-motion';
-import { Clock, User, DollarSign, MapPin, Phone, CheckCircle, X, UserX, Repeat } from 'lucide-react';
+import { Clock, User, DollarSign, MapPin, Phone, CheckCircle, X, UserX, Repeat, MessageSquare } from 'lucide-react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
@@ -397,6 +397,11 @@ export function CalendarEvent({
                 }`}>
                   {getPatientInitials(patient?.nome)}
                 </div>
+                {appointment.criadoViaWhatsapp && (
+                  <div title="Criado via WhatsApp">
+                    <MessageSquare className="w-3 h-3 text-green-600 flex-shrink-0" />
+                  </div>
+                )}
                 <div className="flex-1 min-w-0 space-y-0">
                   <p className="text-[13px] font-semibold leading-tight truncate pr-1 text-slate-900">
                     {patient?.nome || 'Paciente'}
@@ -478,6 +483,16 @@ export function CalendarEvent({
                   >
                     <Repeat className="w-3 h-3" />
                     Recorrente
+                  </Badge>
+                )}
+                {appointment.criadoViaWhatsapp && (
+                  <Badge
+                    variant="outline"
+                    className="flex items-center gap-1 text-xs px-3 py-1 font-semibold border-green-200 text-green-700 bg-green-50"
+                    title="Agendamento criado pelo cliente via WhatsApp"
+                  >
+                    <MessageSquare className="w-3 h-3" />
+                    WhatsApp
                   </Badge>
                 )}
                   <Badge 

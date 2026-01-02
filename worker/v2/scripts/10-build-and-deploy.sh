@@ -56,3 +56,5 @@ echo ""
 echo "📋 Ver logs:"
 echo "   gcloud compute ssh ${VM_NAME} --zone=${ZONE} --project=${PROJECT_ID} --command='cd /opt/evolution-api-v2-gcp && sudo docker compose logs -f evolution-api'"
 
+
+

@@ -37,6 +37,7 @@
   ],
   "exclude": [
     "node_modules",
-    "calendar-6.3.3-trial"
+    "calendar-6.3.3-trial",
+    "worker/**/*"
   ]
 }
