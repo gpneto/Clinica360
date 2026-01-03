@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { 
   Settings, 
   Save, 
@@ -121,6 +122,10 @@ interface SettingsData {
   agendamentoWhatsappApenasContatos?: boolean;
   agendamentoWhatsappServicosIds?: string[]; // IDs dos serviços disponíveis para agendamento pelo WhatsApp
   
+  // Configurações de mensagem de aniversário
+  mensagemAniversarioAutomatica?: boolean;
+  mensagemAniversarioTexto?: string;
+  
   // Configurações de horário
   horarioFuncionamento: HorarioFuncionamentoConfig;
   
@@ -200,6 +205,16 @@ export default function SettingsPage() {
     agendamentoWhatsappHabilitado: false,
     agendamentoWhatsappApenasContatos: false,
     agendamentoWhatsappServicosIds: [],
+    mensagemAniversarioAutomatica: false,
+    mensagemAniversarioTexto: `🎉 *Feliz Aniversário, {{NOME_CLIENTE}}!* 🎉 🎉 
+
+Parabéns pelo seu aniversário! 🎂 
+
+Que este novo ano traga muita saúde, felicidade e inúmeras realizações. Que cada dia seja uma nova oportunidade para celebrar a vida e conquistar seus sonhos. 🎊 Desejamos um dia muito especial, repleto de momentos inesquecíveis! 🍀
+
+ Agradecemos sua confiança em nossos serviços e desejamos um novo ano cheio de saúde, alegria e realizações! 🎂✨ 
+
+Parabéns pelo seu dia especial! 🎈`,
     horarioFuncionamento: {
       horariosPorDia: [
         { diaSemana: 1, inicio: '08:00', fim: '18:00', ativo: true },
@@ -355,6 +370,17 @@ export default function SettingsPage() {
             }
           }
           
+          // Mensagem padrão de aniversário
+          const mensagemAniversarioPadrao = `🎉 *Feliz Aniversário, {{NOME_CLIENTE}}!* 🎉 🎉 
+
+Parabéns pelo seu aniversário! 🎂 
+
+Que este novo ano traga muita saúde, felicidade e inúmeras realizações. Que cada dia seja uma nova oportunidade para celebrar a vida e conquistar seus sonhos. 🎊 Desejamos um dia muito especial, repleto de momentos inesquecíveis! 🍀
+
+ Agradecemos sua confiança em nossos serviços e desejamos um novo ano cheio de saúde, alegria e realizações! 🎂✨ 
+
+Parabéns pelo seu dia especial! 🎈`;
+
           return {
             ...prev,
             ...data,
@@ -370,6 +396,10 @@ export default function SettingsPage() {
             customerLabel: (data.customerLabel as SettingsData['customerLabel']) ?? prev.customerLabel,
             showCommission: data.showCommission ?? prev.showCommission,
             horarioFuncionamento,
+            // Usar mensagem padrão se não houver mensagem salva ou se estiver vazia
+            mensagemAniversarioTexto: (data.mensagemAniversarioTexto && data.mensagemAniversarioTexto.trim()) 
+              ? data.mensagemAniversarioTexto 
+              : mensagemAniversarioPadrao,
           };
         });
         
@@ -3296,6 +3326,70 @@ export default function SettingsPage() {
                               )}
                             </div>
                           </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Configurações de Mensagem de Aniversário */}
+                    <div className="space-y-4 rounded-lg border border-dashed border-primary/40 bg-primary/5 p-4">
+                      <div className="flex flex-col gap-2">
+                        <div>
+                          <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+                            <Sparkles className="h-4 w-4" />
+                            Mensagem de Aniversário Automática
+                          </h3>
+                          <p className={cn('text-sm mt-1', subtleTextClass)}>
+                            Configure o envio automático de mensagens de aniversário para {settings.customerLabel === 'paciente' ? 'pacientes' : 'clientes'}.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        <label className="flex items-start gap-3 rounded-lg border border-input/60 bg-muted/20 p-4 transition hover:border-primary cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={settings.mensagemAniversarioAutomatica || false}
+                            onChange={(e) => setSettings(prev => ({ 
+                              ...prev, 
+                              mensagemAniversarioAutomatica: e.target.checked
+                            }))}
+                            className="mt-1 h-4 w-4 rounded border border-input bg-background text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                          />
+                          <div className="space-y-1 flex-1">
+                            <span className="text-sm font-medium text-foreground">Habilitar envio automático de mensagem de aniversário</span>
+                            <p className={cn('text-sm', subtleTextClass)}>
+                              Quando habilitado, mensagens de aniversário serão enviadas automaticamente no dia do aniversário do {settings.customerLabel === 'paciente' ? 'paciente' : 'cliente'}.
+                            </p>
+                            <p className={cn('text-xs mt-1 font-medium', subtleTextClass)}>
+                              ⏰ As mensagens serão enviadas automaticamente todos os dias às 09:00 (horário de Brasília).
+                            </p>
+                            {(!settings.whatsappProvider || settings.whatsappProvider === 'disabled') && (
+                              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                                ⚠️ É necessário configurar o provedor de WhatsApp acima para usar esta funcionalidade.
+                              </p>
+                            )}
+                          </div>
+                        </label>
+
+                        {settings.mensagemAniversarioAutomatica && (
+                          <div className="space-y-2 rounded-lg border border-input/60 bg-muted/20 p-4">
+                            <Label htmlFor="mensagem-aniversario-texto" className="text-sm font-medium text-foreground">
+                              Mensagem de Aniversário
+                            </Label>
+                            <Textarea
+                              id="mensagem-aniversario-texto"
+                              value={settings.mensagemAniversarioTexto || ''}
+                              onChange={(e) => setSettings(prev => ({
+                                ...prev,
+                                mensagemAniversarioTexto: e.target.value
+                              }))}
+                              placeholder="Digite a mensagem que será enviada automaticamente no dia do aniversário. Use {{NOME_CLIENTE}} para incluir o nome do paciente/cliente."
+                              className="min-h-[120px] w-full resize-none"
+                            />
+                            <p className={cn('text-xs', subtleTextClass)}>
+                              💡 Dica: Use <code className="px-1 py-0.5 bg-muted rounded text-xs">{'{{NOME_CLIENTE}}'}</code> no texto para incluir o nome do {settings.customerLabel === 'paciente' ? 'paciente' : 'cliente'} na mensagem.
+                            </p>
+                          </div>
                         )}
                       </div>
                     </div>

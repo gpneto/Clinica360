@@ -695,6 +695,285 @@ export const sendReminders = onSchedule({
   }
 });
 
+// Função agendada para enviar mensagens de aniversário automaticamente
+export const sendBirthdayMessages = onSchedule({
+  schedule: '0 9 * * *', // Todos os dias às 09:00
+  timeZone: 'America/Sao_Paulo',
+  secrets: ['evolution-api-key', 'evolution-api-url'],
+}, async () => {
+  try {
+    console.log('[sendBirthdayMessages] Iniciando envio automático de mensagens de aniversário');
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayMonth = today.getMonth() + 1; // getMonth() retorna 0-11
+    const todayDay = today.getDate();
+    
+    // Buscar todas as empresas
+    const companiesSnapshot = await db.collection('companies').get();
+    console.log(`[sendBirthdayMessages] Total de empresas encontradas: ${companiesSnapshot.size}`);
+    
+    let totalProcessed = 0;
+    let totalSent = 0;
+    let totalErrors = 0;
+    
+    for (const companyDoc of companiesSnapshot.docs) {
+      const companyId = companyDoc.id;
+      
+      try {
+        // Buscar configurações da empresa
+        const settingsDoc = await db.collection(`companies/${companyId}/settings`).doc('general').get();
+        if (!settingsDoc.exists) {
+          console.log(`[sendBirthdayMessages] Empresa ${companyId} não tem configurações, pulando...`);
+          continue;
+        }
+        
+        const settings = settingsDoc.data();
+        
+        // Verificar se envio automático está habilitado
+        if (!settings?.mensagemAniversarioAutomatica) {
+          console.log(`[sendBirthdayMessages] Empresa ${companyId} não tem envio automático habilitado, pulando...`);
+          continue;
+        }
+        
+        // Verificar se há mensagem configurada
+        const mensagemTexto = settings?.mensagemAniversarioTexto;
+        if (!mensagemTexto || !mensagemTexto.trim()) {
+          console.log(`[sendBirthdayMessages] Empresa ${companyId} não tem mensagem configurada, pulando...`);
+          continue;
+        }
+        
+        // Verificar se WhatsApp está configurado
+        const whatsappProvider = settings?.whatsappProvider;
+        if (!whatsappProvider || whatsappProvider === 'disabled') {
+          console.log(`[sendBirthdayMessages] Empresa ${companyId} não tem WhatsApp configurado, pulando...`);
+          continue;
+        }
+        
+        // Buscar configuração do WhatsApp
+        const config = await getWhatsappConfig(companyId);
+        if (config.provider === 'disabled') {
+          console.log(`[sendBirthdayMessages] Empresa ${companyId} tem WhatsApp desabilitado, pulando...`);
+          continue;
+        }
+        
+        // Buscar pacientes que fazem aniversário hoje
+        const patientsSnapshot = await db.collection(`companies/${companyId}/patients`).get();
+        
+        for (const patientDoc of patientsSnapshot.docs) {
+          const patientData = patientDoc.data();
+          const patientId = patientDoc.id;
+          const dataNascimento = patientData?.dataNascimento;
+          
+          if (!dataNascimento) {
+            continue; // Paciente sem data de nascimento
+          }
+          
+          // Converter dataNascimento para Date
+          let birthDate: Date;
+          if (dataNascimento.toDate) {
+            birthDate = dataNascimento.toDate();
+          } else if (dataNascimento.seconds) {
+            birthDate = new Date(dataNascimento.seconds * 1000);
+          } else if (dataNascimento instanceof Date) {
+            birthDate = dataNascimento;
+          } else {
+            continue; // Formato de data inválido
+          }
+          
+          // Verificar se é aniversário hoje (mesmo dia e mês)
+          if (birthDate.getMonth() + 1 !== todayMonth || birthDate.getDate() !== todayDay) {
+            continue; // Não é aniversário hoje
+          }
+          
+          // Verificar se já foi enviada mensagem hoje
+          const birthdayMessagesSnapshot = await db
+            .collection(`companies/${companyId}/birthdayMessages`)
+            .where('patientId', '==', patientId)
+            .where('sentAt', '>=', admin.firestore.Timestamp.fromDate(today))
+            .get();
+          
+          if (!birthdayMessagesSnapshot.empty) {
+            console.log(`[sendBirthdayMessages] Mensagem já enviada para paciente ${patientId} hoje, pulando...`);
+            continue;
+          }
+          
+          // Verificar se paciente tem telefone
+          const telefoneE164 = patientData?.telefoneE164;
+          if (!telefoneE164) {
+            console.log(`[sendBirthdayMessages] Paciente ${patientId} não tem telefone, pulando...`);
+            continue;
+          }
+          
+          // Obter nome do paciente
+          const pacienteNome = patientData?.nome || '';
+          const pacientePrimeiroNome = pacienteNome.split(' ')[0] || pacienteNome;
+          
+          // Substituir {{NOME_CLIENTE}} pelo nome do paciente
+          const mensagemFormatada = mensagemTexto.replace(/\{\{NOME_CLIENTE\}\}/g, pacientePrimeiroNome);
+          
+          try {
+            totalProcessed++;
+            
+            // Enviar mensagem
+            const normalized = normalizarTelefone(telefoneE164);
+            if (!normalized) {
+              console.error(`[sendBirthdayMessages] Telefone inválido para paciente ${patientId}: ${telefoneE164}`);
+              totalErrors++;
+              continue;
+            }
+            
+            let destino = normalized.startsWith('55') ? normalized : `55${normalized}`;
+            
+            let wamId: string;
+            let chatId: string;
+            let provider: string;
+            let sentSuccessfully = false;
+            
+            try {
+              // Enviar mensagem de texto simples
+              if (config.provider === 'evolution') {
+                const evolutionConfig = config as any;
+                const resultadoEnvio = await sendEvolutionTextMessage({
+                  companyId: evolutionConfig.companyId || companyId,
+                  to: destino,
+                  message: mensagemFormatada,
+                });
+                wamId = resultadoEnvio.messageId || `birthday_evolution_${Date.now()}_${patientId}`;
+                chatId = normalizePhoneForContact(destino);
+                provider = 'evolution';
+                sentSuccessfully = true;
+                totalSent++;
+                
+                console.log(`[sendBirthdayMessages] Mensagem enviada para paciente ${patientId} (${pacienteNome})`, {
+                  companyId,
+                  patientId,
+                  wamId,
+                  provider,
+                });
+              } else if (config.provider === 'meta') {
+                // Para Meta, usar a função existente com template (Meta requer templates)
+                // Extrair apenas o texto central da mensagem para o template
+                const textoCentral = mensagemFormatada
+                  .replace(/🎉\s*\*?Feliz\s+Aniversário[^*]*\*?\s*🎉/gi, '')
+                  .replace(/Parabéns pelo seu aniversário! 🎂/gi, '')
+                  .replace(/Agradecemos sua confiança.*?!/gi, '')
+                  .replace(/Parabéns pelo seu dia especial! 🎈/gi, '')
+                  .trim();
+                
+                const resultado = await sendBirthdayMessageViaProvider(
+                  config,
+                  destino,
+                  normalized,
+                  pacientePrimeiroNome,
+                  textoCentral || 'Feliz aniversário!',
+                  companyId
+                );
+                wamId = resultado.wamId;
+                chatId = resultado.chatId;
+                provider = resultado.provider;
+                sentSuccessfully = true;
+                totalSent++;
+                
+                console.log(`[sendBirthdayMessages] Mensagem enviada para paciente ${patientId} (${pacienteNome})`, {
+                  companyId,
+                  patientId,
+                  wamId,
+                  provider,
+                });
+              } else {
+                throw new Error(`Provedor não suportado: ${(config as any).provider}`);
+              }
+            } catch (sendError: any) {
+              console.error(`[sendBirthdayMessages] Erro ao enviar mensagem para paciente ${patientId}:`, sendError);
+              wamId = `birthday_${Date.now()}_${patientId}`;
+              chatId = normalizePhoneForContact(destino);
+              provider = config.provider as string;
+              totalErrors++;
+            }
+            
+            // Registrar no Firestore (sempre registrar, mesmo se falhar)
+            await db.collection(`companies/${companyId}/birthdayMessages`).add({
+              patientId,
+              patientFirstName: pacientePrimeiroNome,
+              phone: destino,
+              message: mensagemFormatada,
+              wamId,
+              chatId,
+              sentBy: 'system', // Sistema automático
+              sentAt: admin.firestore.Timestamp.fromDate(new Date()),
+              birthdayDate: admin.firestore.Timestamp.fromDate(today),
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            
+            // Registrar também em whatsappMessages para histórico
+            const configCompanyId = (config as any).companyId || companyId;
+            await db.collection(`companies/${configCompanyId}/whatsappMessages`).doc(wamId).set(
+              {
+                message: {
+                  id: wamId,
+                  to: chatId,
+                  type: 'text',
+                  provider: provider as 'meta' | 'evolution',
+                  text: {
+                    body: mensagemFormatada,
+                    preview_url: false,
+                  },
+                },
+                wam_id: wamId,
+                chat_id: chatId,
+                provider: provider as 'baileys' | 'meta',
+                companyId: companyId,
+                direction: 'outbound',
+                messageSource: 'automatic',
+                sentBy: 'system',
+                patientId: patientId,
+                messageType: 'birthday',
+                sentSuccessfully: sentSuccessfully,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              },
+              { merge: true }
+            );
+            
+            // Atualizar contato do WhatsApp
+            const patientName = await findPatientNameByPhone(companyId, chatId);
+            const contactData: any = {
+              wa_id: chatId,
+              last_message_at: admin.firestore.FieldValue.serverTimestamp(),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              companyId: companyId,
+            };
+            if (patientName) {
+              contactData.name = patientName;
+              contactData.patientName = patientName;
+            }
+            await db.collection(`companies/${configCompanyId}/whatsappContacts`).doc(chatId).set(
+              contactData,
+              { merge: true }
+            );
+            
+          } catch (error: any) {
+            console.error(`[sendBirthdayMessages] Erro ao processar paciente ${patientId}:`, error);
+            totalErrors++;
+          }
+        }
+      } catch (error: any) {
+        console.error(`[sendBirthdayMessages] Erro ao processar empresa ${companyId}:`, error);
+        totalErrors++;
+      }
+    }
+    
+    console.log('[sendBirthdayMessages] Processamento concluído', {
+      totalProcessed,
+      totalSent,
+      totalErrors,
+      companiesProcessed: companiesSnapshot.size,
+    });
+  } catch (error) {
+    console.error('[sendBirthdayMessages] Erro ao processar mensagens de aniversário:', error);
+  }
+});
+
 // Função auxiliar para enviar lembrete
 // Legacy reminder logic removed in favor of processarNotificacoesAgendamentos
 
